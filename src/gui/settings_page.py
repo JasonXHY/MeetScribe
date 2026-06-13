@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QPushButton, QLineEdit, QComboBox, QCheckBox, QScrollArea,
     QFileDialog, QMessageBox,
 )
-from PySide6.QtCore import Qt, Signal, QThread
+from PySide6.QtCore import Qt, Signal, QThread, QSize
 from PySide6.QtGui import QFont
 
 from gui.styles import (
