@@ -21,7 +21,7 @@ from PySide6.QtGui import QFont
 
 from gui.styles import (
     C_BG, C_CARD, C_BORDER, C_ACCENT, C_ACCENT_LT, C_BTN_HOVER,
-    C_SUCCESS, C_ERROR, C_TXT1, C_TXT2, C_TXT3,
+    C_SUCCESS, C_ERROR, C_TXT1, C_TXT2, C_TXT3, C_PURPLE,
     FONT_FAMILY, SPEAKER_COLORS, DEFAULT_SPK_QUALITY,
 )
 
@@ -155,12 +155,7 @@ class AddVoiceDialog(QDialog):
 
         self._record_btn = QPushButton("开始录音")
         self._record_btn.setFixedSize(120, 36)
-        self._record_btn.setStyleSheet(f"""
-            QPushButton {{ background-color: {C_ERROR}; color: white;
-                border: none; border-radius: 6px; font-family: {FONT_FAMILY};
-                font-size: 12px; font-weight: bold; }}
-            QPushButton:hover {{ background-color: #A52318; }}
-        """)
+        self._record_btn.setProperty("cssClass", "danger")
         self._record_btn.setCursor(Qt.PointingHandCursor)
         self._record_btn.clicked.connect(self._toggle_recording)
         btn_layout.addWidget(self._record_btn)
@@ -168,13 +163,7 @@ class AddVoiceDialog(QDialog):
         self._save_btn = QPushButton("保存")
         self._save_btn.setFixedSize(80, 36)
         self._save_btn.setEnabled(False)
-        self._save_btn.setStyleSheet(f"""
-            QPushButton {{ background-color: {C_SUCCESS}; color: white;
-                border: none; border-radius: 6px; font-family: {FONT_FAMILY};
-                font-size: 12px; }}
-            QPushButton:hover {{ background-color: #0A5E0A; }}
-            QPushButton:disabled {{ background-color: #999; }}
-        """)
+        self._save_btn.setProperty("cssClass", "success")
         self._save_btn.setCursor(Qt.PointingHandCursor)
         self._save_btn.clicked.connect(self._save)
         btn_layout.addWidget(self._save_btn)
@@ -183,12 +172,6 @@ class AddVoiceDialog(QDialog):
 
         cancel_btn = QPushButton("取消")
         cancel_btn.setFixedSize(80, 36)
-        cancel_btn.setStyleSheet(f"""
-            QPushButton {{ background-color: transparent; color: {C_TXT2};
-                border: 1px solid {C_BORDER}; border-radius: 6px;
-                font-family: {FONT_FAMILY}; font-size: 12px; }}
-            QPushButton:hover {{ background-color: #F5F5F5; }}
-        """)
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
@@ -548,23 +531,13 @@ class VoiceprintPage(QWidget):
             btn_layout = QHBoxLayout()
             edit_btn = QPushButton("编辑")
             edit_btn.setFixedSize(60, 28)
-            edit_btn.setStyleSheet(f"""
-                QPushButton {{ background-color: {C_ACCENT}; color: white;
-                    border: none; border-radius: 4px; font-size: 11px; }}
-                QPushButton:hover {{ background-color: {C_BTN_HOVER}; }}
-                QPushButton:pressed {{ background-color: #004A8C; }}
-            """)
+            edit_btn.setProperty("cssClass", "primary")
             edit_btn.clicked.connect(lambda: self._edit_speaker(speaker_name))
             btn_layout.addWidget(edit_btn)
 
             delete_btn = QPushButton("删除")
             delete_btn.setFixedSize(60, 28)
-            delete_btn.setStyleSheet(f"""
-                QPushButton {{ background-color: {C_ERROR}; color: white;
-                    border: none; border-radius: 4px; font-size: 11px; }}
-                QPushButton:hover {{ background-color: #A52318; }}
-                QPushButton:pressed {{ background-color: #8C1D10; }}
-            """)
+            delete_btn.setProperty("cssClass", "danger")
             delete_btn.clicked.connect(lambda: self._delete_speaker(speaker_name))
             btn_layout.addWidget(delete_btn)
             btn_layout.addStretch()

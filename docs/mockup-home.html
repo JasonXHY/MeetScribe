@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>侧耳倾听 - 主页 Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; background: #F8F9FA; color: #111827; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── TopBar ── */
+  .topbar { height: 44px; background: #FFF; border-bottom: 1px solid #E5E7EB; display: flex; align-items: center; padding: 0 20px; flex-shrink: 0; }
+  .topbar-brand { font-size: 15px; font-weight: 700; color: #3B82F6; margin-right: 24px; letter-spacing: 0.5px; }
+  .topbar-nav { display: flex; gap: 4px; }
+  .topbar-nav a { padding: 6px 14px; border-radius: 6px; font-size: 13px; color: #6B7280; text-decoration: none; cursor: pointer; transition: all 0.15s; }
+  .topbar-nav a:hover { background: #F3F4F6; color: #111827; }
+  .topbar-nav a.active { background: #EFF6FF; color: #3B82F6; font-weight: 500; }
+  .topbar-version { margin-left: auto; font-size: 11px; color: #9CA3AF; }
+
+  /* ── Page ── */
+  .page { flex: 1; display: flex; flex-direction: column; padding: 20px 24px 12px; overflow: hidden; }
+  .page-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+  .page-title { font-size: 24px; font-weight: 700; color: #111827; }
+  .page-subtitle { font-size: 12px; color: #9CA3AF; }
+
+  /* ── Recording Bar ── */
+  .rec-bar { background: #FFF; border: 1px solid #E5E7EB; border-radius: 8px; padding: 10px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-shrink: 0; }
+  .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #D1D5DB; flex-shrink: 0; }
+  .rec-dot.active { background: #EF4444; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .rec-status { font-size: 12px; color: #6B7280; width: 56px; flex-shrink: 0; }
+  .rec-status.active { color: #EF4444; }
+  .rec-mode { font-size: 12px; color: #9CA3AF; width: 50px; flex-shrink: 0; }
+  .rec-timer { font-size: 22px; font-weight: 700; color: #111827; width: 110px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .rec-timer.active { color: #EF4444; }
+
+  /* ── Buttons ── */
+  .btn { height: 32px; padding: 0 16px; border-radius: 6px; font-size: 13px; font-family: inherit; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s; white-space: nowrap; }
+  .btn-primary { background: #3B82F6; color: #FFF; }
+  .btn-primary:hover { background: #2563EB; }
+  .btn-danger { background: #EF4444; color: #FFF; }
+  .btn-danger:hover { background: #DC2626; }
+  .btn-success { background: #10B981; color: #FFF; }
+  .btn-success:hover { background: #059669; }
+  .btn-purple { background: #8B5CF6; color: #FFF; }
+  .btn-purple:hover { background: #7C3AED; }
+  .btn-secondary { background: transparent; color: #6B7280; border: 1px solid #E5E7EB; }
+  .btn-secondary:hover { background: #F3F4F6; }
+  .btn-icon { width: 28px; height: 28px; padding: 0; border-radius: 4px; background: transparent; border: none; color: #6B7280; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .btn-icon:hover { background: #F3F4F6; }
+  .btn-sm { height: 22px; padding: 0 8px; font-size: 11px; }
+
+  /* ── File Card ── */
+  .file-card { background: #FFF; border: 1px solid #E5E7EB; border-radius: 8px; display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
+  .file-toolbar { padding: 10px 14px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #F3F4F6; flex-shrink: 0; }
+  .file-toolbar .spacer { flex: 1; }
+  .file-toolbar .fmt-label { font-size: 11px; color: #9CA3AF; margin-right: 6px; }
+  .file-toolbar select { height: 28px; border: 1px solid #E5E7EB; border-radius: 6px; padding: 0 8px; font-size: 11px; font-family: inherit; color: #111827; background: #F9FAFB; }
+
+  /* ── Table ── */
+  .file-table { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .table-header { display: grid; grid-template-columns: 40px 1fr 120px 80px 80px 60px 100px; padding: 0 14px; height: 32px; align-items: center; border-bottom: 1px solid #E5E7EB; background: #FAFBFC; flex-shrink: 0; }
+  .table-header span { font-size: 11px; font-weight: 600; color: #9CA3AF; }
+  .table-header span.center { text-align: center; }
+  .table-body { flex: 1; overflow-y: auto; }
+  .table-row { display: grid; grid-template-columns: 40px 1fr 120px 80px 80px 60px 100px; padding: 0 14px; height: 38px; align-items: center; border-bottom: 1px solid #F3F4F6; cursor: pointer; transition: background 0.1s; }
+  .table-row:hover { background: #F9FAFB; }
+  .table-row.selected { background: #EFF6FF; }
+  .table-row .col-queue { font-size: 11px; color: #9CA3AF; text-align: center; }
+  .table-row .col-name { font-size: 13px; color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  .table-row .col-name .dot { width: 6px; height: 6px; border-radius: 50%; background: #3B82F6; flex-shrink: 0; }
+  .table-row .col-topic { font-size: 12px; color: #9CA3AF; }
+  .table-row .col-dur, .table-row .col-size { font-size: 12px; color: #6B7280; text-align: center; font-variant-numeric: tabular-nums; }
+  .table-row .col-status { text-align: center; font-size: 14px; }
+  .table-row .col-actions { display: flex; gap: 2px; justify-content: flex-start; }
+  .status-done { color: #10B981; }
+  .status-failed { color: #EF4444; }
+  .status-pending { color: #9CA3AF; }
+  .status-processing { color: #3B82F6; }
+
+  /* ── Empty State ── */
+  .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #9CA3AF; }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; opacity: 0.3; }
+  .empty-state .title { font-size: 15px; margin-bottom: 4px; }
+  .empty-state .hint { font-size: 12px; }
+
+  /* ── Log Area ── */
+  .log-card { background: #FFF; border: 1px solid #E5E7EB; border-radius: 8px; height: 120px; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden; margin-top: 8px; }
+  .log-header { padding: 8px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #F3F4F6; flex-shrink: 0; }
+  .log-header .title { font-size: 12px; font-weight: 600; color: #6B7280; }
+  .log-body { flex: 1; overflow-y: auto; padding: 6px 14px; font-family: "Cascadia Code", Consolas, monospace; font-size: 11px; color: #6B7280; line-height: 1.6; }
+  .log-body .log-line { display: flex; gap: 8px; }
+  .log-body .log-time { color: #9CA3AF; flex-shrink: 0; }
+  .log-body .log-msg { color: #374151; }
+  .log-body .log-msg.error { color: #EF4444; }
+  .log-body .log-msg.success { color: #10B981; }
+
+  /* ── Status Bar ── */
+  .statusbar { height: 28px; background: #FAFAFA; border-top: 1px solid #E5E7EB; display: flex; align-items: center; padding: 0 12px; font-size: 11px; color: #9CA3AF; flex-shrink: 0; }
+  .statusbar .engine { margin-left: auto; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+</style>
+</head>
+<body>
+
+<!-- TopBar -->
+<div class="topbar">
+  <span class="topbar-brand">侧耳倾听</span>
+  <div class="topbar-nav">
+    <a class="active">主页</a>
+    <a>音色库</a>
+    <a>设置</a>
+  </div>
+  <span class="topbar-version">MeetScribe v1.0</span>
+</div>
+
+<!-- Page -->
+<div class="page">
+  <div class="page-header">
+    <span class="page-title">主页</span>
+    <span class="page-subtitle">共 3 个文件，已选 1</span>
+  </div>
+
+  <!-- Recording Bar -->
+  <div class="rec-bar">
+    <div class="rec-dot"></div>
+    <span class="rec-status">准备就绪</span>
+    <span class="rec-mode">现场会议</span>
+    <span class="rec-timer">00:00:00</span>
+    <button class="btn btn-danger" style="width:90px;justify-content:center;">开始录音</button>
+    <button class="btn btn-secondary" style="width:60px;justify-content:center;" disabled>暂停</button>
+    <button class="btn btn-secondary" style="width:60px;justify-content:center;" disabled>停止</button>
+    <div style="flex:1"></div>
+    <span style="font-size:10px;color:#9CA3AF;">16kHz WAV · 录音结束后可直接转写</span>
+    <span style="font-size:11px;color:#9CA3AF;margin-left:12px;">转写队列: 空</span>
+  </div>
+
+  <!-- File Card -->
+  <div class="file-card">
+    <!-- Toolbar -->
+    <div class="file-toolbar">
+      <button class="btn btn-primary">添加文件</button>
+      <button class="btn btn-success">开始转写</button>
+      <button class="btn btn-purple">AI 摘要</button>
+      <button class="btn btn-secondary">合并转写</button>
+      <div style="width:1px;height:20px;background:#E5E7EB;margin:0 4px;"></div>
+      <button class="btn btn-secondary">删除选中</button>
+      <button class="btn btn-secondary">清空列表</button>
+      <div class="spacer"></div>
+      <span class="fmt-label">输出格式</span>
+      <select>
+        <option>Markdown (推荐)</option>
+        <option selected>LLM Markdown</option>
+        <option>HTML 网页</option>
+        <option>纯文本</option>
+        <option>SRT 字幕</option>
+        <option>JSON</option>
+      </select>
+    </div>
+
+    <!-- Table -->
+    <div class="file-table">
+      <div class="table-header">
+        <span>队列</span>
+        <span>文件名</span>
+        <span>主题</span>
+        <span class="center">时长</span>
+        <span class="center">大小</span>
+        <span class="center">状态</span>
+        <span>操作</span>
+      </div>
+      <div class="table-body">
+        <div class="table-row selected">
+          <span class="col-queue"></span>
+          <span class="col-name"><span class="dot"></span>26061403会议.wav</span>
+          <span class="col-topic"></span>
+          <span class="col-dur">00:03</span>
+          <span class="col-size">104 KB</span>
+          <span class="col-status status-failed">✗</span>
+          <span class="col-actions">
+            <button class="btn-icon" title="重新转写">🔄</button>
+          </span>
+        </div>
+        <div class="table-row">
+          <span class="col-queue"></span>
+          <span class="col-name">产品评审-0610.m4a</span>
+          <span class="col-topic">产品评审</span>
+          <span class="col-dur">45:12</span>
+          <span class="col-size">18.2 MB</span>
+          <span class="col-status status-done">✓</span>
+          <span class="col-actions">
+            <button class="btn-icon" title="预览" style="color:#3B82F6;">👁</button>
+            <button class="btn-icon" title="打开文件夹" style="background:#3B82F6;color:#FFF;">📂</button>
+            <button class="btn-icon" title="发言人" style="color:#8B5CF6;">👤</button>
+            <button class="btn-icon" title="重新转写" style="color:#F59E0B;">🔄</button>
+            <button class="btn-icon" title="导出" style="color:#3B82F6;">📤</button>
+          </span>
+        </div>
+        <div class="table-row">
+          <span class="col-queue"></span>
+          <span class="col-name">周会录音_0607.wav</span>
+          <span class="col-topic">周会</span>
+          <span class="col-dur">01:23:45</span>
+          <span class="col-size">95.6 MB</span>
+          <span class="col-status status-pending">○</span>
+          <span class="col-actions">
+            <button class="btn-icon" title="转写" style="background:#10B981;color:#FFF;">▶</button>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log Area -->
+  <div class="log-card">
+    <div class="log-header">
+      <span class="title">运行日志</span>
+      <button class="btn btn-sm btn-secondary">清除</button>
+    </div>
+    <div class="log-body">
+      <div class="log-line"><span class="log-time">[09:30:15]</span><span class="log-msg success">录音已开始 (模式: mic)</span></div>
+      <div class="log-line"><span class="log-time">[09:35:42]</span><span class="log-msg success">录音已保存: 26061403会议.wav</span></div>
+      <div class="log-line"><span class="log-time">[09:35:43]</span><span class="log-msg">开始转写: 26061403会议.wav</span></div>
+      <div class="log-line"><span class="log-time">[09:35:48]</span><span class="log-msg error">转写完成: 成功 0 个, 失败 1 个</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- StatusBar -->
+<div class="statusbar">
+  <span>就绪</span>
+  <span class="engine">SenseVoice + CAM++ + ct-punc</span>
+</div>
+
+</body>
+</html>

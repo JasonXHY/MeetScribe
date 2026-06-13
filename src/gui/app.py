@@ -64,6 +64,10 @@ class GUILogHandler(logging.Handler):
             while not self._log_queue.empty():
                 msg = self._log_queue.get_nowait()
                 if self._log_area:
+                    # 日志过滤：只显示用户关心的内容
+                    from gui.home_page import USER_FRIENDLY_KEYWORDS
+                    if not any(keyword in msg for keyword in USER_FRIENDLY_KEYWORDS):
+                        continue
                     self._log_area.appendPlainText(msg)
         except queue.Empty:
             pass

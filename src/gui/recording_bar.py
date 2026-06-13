@@ -143,25 +143,8 @@ class RecordingBar(QFrame):
         # 开始录音按钮
         self.record_btn = QPushButton("开始录音")
         self.record_btn.setFixedSize(90, 32)
+        self.record_btn.setProperty("cssClass", "danger")
         self.record_btn.setCursor(Qt.PointingHandCursor)
-        self.record_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {C_ERROR};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-family: {FONT_FAMILY};
-                font-size: 12px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: #A52318;
-            }}
-            QPushButton:disabled {{
-                background-color: {C_TXT3};
-            }}
-        """)
         self.record_btn.clicked.connect(self.start_clicked.emit)
         layout.addWidget(self.record_btn)
 
@@ -170,24 +153,6 @@ class RecordingBar(QFrame):
         self.pause_btn.setFixedSize(60, 32)
         self.pause_btn.setCursor(Qt.PointingHandCursor)
         self.pause_btn.setEnabled(False)
-        self.pause_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: transparent;
-                border: 1px solid {C_ERROR};
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-family: {FONT_FAMILY};
-                font-size: 12px;
-                color: {C_ERROR};
-            }}
-            QPushButton:hover {{
-                background-color: #FDE8E8;
-            }}
-            QPushButton:disabled {{
-                border-color: {C_TXT3};
-                color: {C_TXT3};
-            }}
-        """)
         self.pause_btn.clicked.connect(self.pause_clicked.emit)
         layout.addWidget(self.pause_btn)
 
@@ -196,24 +161,6 @@ class RecordingBar(QFrame):
         self.stop_btn.setFixedSize(60, 32)
         self.stop_btn.setCursor(Qt.PointingHandCursor)
         self.stop_btn.setEnabled(False)
-        self.stop_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: transparent;
-                border: 1px solid {C_TXT3};
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-family: {FONT_FAMILY};
-                font-size: 12px;
-                color: {C_TXT3};
-            }}
-            QPushButton:hover {{
-                background-color: #F0F0F0;
-            }}
-            QPushButton:disabled {{
-                border-color: {C_TXT3};
-                color: {C_TXT3};
-            }}
-        """)
         self.stop_btn.clicked.connect(self.stop_clicked.emit)
         layout.addWidget(self.stop_btn)
 

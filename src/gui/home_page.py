@@ -201,46 +201,13 @@ class HomePage(QWidget):
 
         self._btn_transcribe = QPushButton("开始转写")
         self._btn_transcribe.setFixedSize(90, 32)
-        self._btn_transcribe.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {C_SUCCESS};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-family: {FONT_FAMILY};
-                font-size: 12px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: #0A5E0A;
-            }}
-            QPushButton:disabled {{
-                background-color: {C_TXT3};
-            }}
-        """)
+        self._btn_transcribe.setProperty("cssClass", "success")
         self._btn_transcribe.setCursor(Qt.PointingHandCursor)
         toolbar.addWidget(self._btn_transcribe)
 
         self._btn_ai_summary = QPushButton("AI 摘要")
         self._btn_ai_summary.setFixedSize(84, 32)
-        self._btn_ai_summary.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #7B2FF2;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-family: {FONT_FAMILY};
-                font-size: 12px;
-            }}
-            QPushButton:hover {{
-                background-color: #6420CC;
-            }}
-            QPushButton:disabled {{
-                background-color: {C_TXT3};
-            }}
-        """)
+        self._btn_ai_summary.setProperty("cssClass", "purple")
         self._btn_ai_summary.setCursor(Qt.PointingHandCursor)
         toolbar.addWidget(self._btn_ai_summary)
 
@@ -866,11 +833,48 @@ class HomePage(QWidget):
         if files:
             # 按添加时间降序排序
             files = sorted(files, key=lambda f: f.added_time, reverse=True)
-            self._file_list_view.refresh(files)
+            # 转换为新 FileListView 需要的格式
+            file_data = []
+            for f in files:
+                status_map = {
+                    "pending": "pending",
+                    "processing": "processing",
+                    "done": "done",
+                    "failed": "failed",
+                }
+                file_data.append({
+                    "path": f.file_path,
+                    "name": f.file_name,
+                    "topic": getattr(f, 'topic', '') or '',
+                    "duration": f.duration_str if hasattr(f, 'duration_str') else self._format_duration(getattr(f, 'duration_s', 0)),
+                    "size": self._format_size(getattr(f, 'file_size', 0)),
+                    "status": status_map.get(f.status, "pending"),
+                    "queue_pos": None,
+                })
+            self._file_list_view.set_files(file_data)
             self._file_count_lbl.setText(f"共 {len(files)} 个文件")
         else:
-            self._file_list_view.refresh([])
+            self._file_list_view.set_files([])
             self._file_count_lbl.setText("")
+
+    def _format_duration(self, seconds):
+        """格式化时长"""
+        if not seconds:
+            return ""
+        mins = int(seconds // 60)
+        secs = int(seconds % 60)
+        return f"{mins:02d}:{secs:02d}"
+
+    def _format_size(self, size_bytes):
+        """格式化文件大小"""
+        if not size_bytes:
+            return ""
+        if size_bytes < 1024:
+            return f"{size_bytes}B"
+        elif size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.1f}KB"
+        else:
+            return f"{size_bytes / (1024 * 1024):.1f}MB"
 
     def get_selected_format(self):
         """获取选中的导出格式"""
