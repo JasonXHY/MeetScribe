@@ -1,0 +1,9 @@
+{
+  "permission": {
+    "*": "allow",
+    "bash": "allow",
+    "edit": "allow",
+    "write": "allow"
+  },
+  "instructions": [".mimocode/rules/decisions.md"]
+}

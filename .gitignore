@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Pytest
+.pytest_cache/
+
+# Logs
+logs/
+*.log
+
+# Models cache (large binary files)
+models_cache/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Environment
+.env
+.venv/
+venv/
+env/
+
+# Mimetype
+.mimocode/
+
+# Data (local runtime data)
+data/
+
+# Config with secrets (API keys)
+config/settings.json

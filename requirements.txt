@@ -1,0 +1,20 @@
+# 侧耳倾听 Dependencies
+# Core GUI
+PySide6>=6.5.0
+
+# Audio
+soundfile>=0.12.1
+numpy>=1.24.0
+
+# FunASR (ASR + Speaker Diarization + Punctuation)
+funasr>=1.0.0
+# Models auto-downloaded from ModelScope
+
+# System Audio Recording (WASAPI Loopback)
+pyaudiowpatch>=0.2.12
+
+# AI Service (OpenAI-compatible API)
+openai>=1.0.0
+
+# Optional: FFmpeg for audio format conversion
+# Install separately: https://ffmpeg.org/download.html
