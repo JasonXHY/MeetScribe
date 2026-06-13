@@ -415,7 +415,7 @@ class VoiceprintPage(QWidget):
                 border-bottom: 1px solid #F0F0F0;
             }}
             QListWidget::item:selected {{
-                background-color: {C_ACCENT_LT}; color: {C_TXT1};
+                background-color: #D6E4F7; color: {C_TXT1};
             }}
             QListWidget::item:hover {{
                 background-color: #F5F8FF;
@@ -447,7 +447,7 @@ class VoiceprintPage(QWidget):
         self._detail_title = QLabel("请选择一个说话人")
         self._detail_title.setStyleSheet(f"""
             QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY};
-                font-size: 14px; background: transparent; border: none; }}
+                font-size: 13px; background: transparent; border: none; }}
         """)
         detail_header_layout.addWidget(self._detail_title)
         detail_header_layout.addStretch()
@@ -550,7 +550,9 @@ class VoiceprintPage(QWidget):
             edit_btn.setFixedSize(60, 28)
             edit_btn.setStyleSheet(f"""
                 QPushButton {{ background-color: {C_ACCENT}; color: white;
-                    border: none; border-radius: 6px; font-size: 11px; }}
+                    border: none; border-radius: 4px; font-size: 11px; }}
+                QPushButton:hover {{ background-color: {C_BTN_HOVER}; }}
+                QPushButton:pressed {{ background-color: #004A8C; }}
             """)
             edit_btn.clicked.connect(lambda: self._edit_speaker(speaker_name))
             btn_layout.addWidget(edit_btn)
@@ -559,7 +561,9 @@ class VoiceprintPage(QWidget):
             delete_btn.setFixedSize(60, 28)
             delete_btn.setStyleSheet(f"""
                 QPushButton {{ background-color: {C_ERROR}; color: white;
-                    border: none; border-radius: 6px; font-size: 11px; }}
+                    border: none; border-radius: 4px; font-size: 11px; }}
+                QPushButton:hover {{ background-color: #A52318; }}
+                QPushButton:pressed {{ background-color: #8C1D10; }}
             """)
             delete_btn.clicked.connect(lambda: self._delete_speaker(speaker_name))
             btn_layout.addWidget(delete_btn)

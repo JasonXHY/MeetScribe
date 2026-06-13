@@ -86,7 +86,7 @@ class SettingsPage(QWidget):
         scroll_content.setStyleSheet("background: transparent;")
         self._scroll_layout = QVBoxLayout(scroll_content)
         self._scroll_layout.setContentsMargins(0, 0, 0, 0)
-        self._scroll_layout.setSpacing(12)
+        self._scroll_layout.setSpacing(10)
 
         self._build_path_section(self._scroll_layout)
         self._build_engine_section(self._scroll_layout)
@@ -109,10 +109,12 @@ class SettingsPage(QWidget):
                 padding: 8px 16px;
                 font-family: {FONT_FAMILY};
                 font-size: 13px;
-                font-weight: bold;
             }}
             QPushButton:hover {{
                 background-color: {C_BTN_HOVER};
+            }}
+            QPushButton:pressed {{
+                background-color: #004A8C;
             }}
         """)
         save_btn.setCursor(Qt.PointingHandCursor)
@@ -361,7 +363,7 @@ class SettingsPage(QWidget):
 
         for line in [
             "引擎: FunASR SenseVoice + CAM++ + ct-punc (本地推理)",
-            "AI: MiMo 云端 (摘要/纠错) + 内网大模型 (预留)",
+            "AI: 支持国内主流云端模型厂商",
             "支持格式: WAV / MP3 / M4A / FLAC / OGG / OGA / OPUS",
         ]:
             lbl = QLabel(line)
@@ -395,14 +397,14 @@ class SettingsPage(QWidget):
         """)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(16, 12, 16, 12)
-        card_layout.setSpacing(8)
+        card_layout.setSpacing(6)
         layout.addWidget(card)
         return card
 
     def _form_row(self, parent, label_text, control_widget, hint_text=None):
         """创建标准表单行：标签(90px右对齐) + 控件 + [可选提示]"""
         row = QHBoxLayout()
-        row.setSpacing(12)
+        row.setSpacing(8)
 
         lbl = QLabel(label_text)
         lbl.setFixedWidth(90)

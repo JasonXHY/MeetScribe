@@ -11,6 +11,10 @@ __pycache__/
 logs/
 *.log
 
+# Recordings and transcripts
+recordings/
+transcripts/
+
 # Models cache (large binary files)
 models_cache/
 

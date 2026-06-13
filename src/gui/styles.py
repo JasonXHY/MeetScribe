@@ -145,7 +145,7 @@ QMainWindow, QDialog {{
 QFrame[cssClass="card"] {{
     background-color: {C_CARD};
     border: 1px solid {C_BORDER};
-    border-radius: 8px;
+    border-radius: 6px;
 }}
 
 /* Button */
@@ -153,7 +153,7 @@ QPushButton {{
     background-color: transparent;
     border: 1px solid {C_BORDER};
     border-radius: 6px;
-    padding: 6px 12px;
+    padding: 4px 10px;
     font-family: {FONT_FAMILY};
     font-size: 12px;
     color: {C_TXT1};
@@ -166,7 +166,7 @@ QPushButton:disabled {{
     border-color: {C_TXT3};
 }}
 QPushButton:pressed {{
-    background-color: #E0E0E0;
+    background-color: #E8E8E8;
 }}
 
 /* Primary Button */
@@ -213,11 +213,11 @@ QComboBox {{
     padding-right: 24px;
     font-family: {FONT_FAMILY};
     font-size: 12px;
-    background-color: #F0F0F0;
+    background-color: #F8F8F8;
     min-height: 22px;
 }}
 QComboBox:hover {{
-    background-color: #E0E0E0;
+    background-color: #E8E8E8;
 }}
 QComboBox::drop-down {{
     border: none;
@@ -225,19 +225,20 @@ QComboBox::drop-down {{
     subcontrol-position: center right;
 }}
 QComboBox::down-arrow {{
-    image: none;
-    width: 0;
-    height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 6px solid {C_TXT2};
-    margin-right: 8px;
+    image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23616161'/%3E%3C/svg%3E");
+    width: 10px;
+    height: 6px;
 }}
 QComboBox QAbstractItemView {{
     background-color: white;
     border: 1px solid {C_BORDER};
     selection-background-color: {C_ACCENT_LT};
-    padding: 2px;
+    padding: 4px;
+    outline: none;
+}}
+QComboBox QAbstractItemView::item {{
+    padding: 4px 8px;
+    min-height: 24px;
 }}
 
 /* ScrollArea */
@@ -290,8 +291,7 @@ QCheckBox::indicator {{
 }}
 QCheckBox::indicator:checked {{
     background-color: white;
-    border-color: {C_ACCENT};
-    image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 6l3 3 5-5' stroke='%230067C0' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+    border: 2px solid {C_ACCENT};
 }}
 QCheckBox::indicator:hover {{
     border-color: {C_ACCENT};
