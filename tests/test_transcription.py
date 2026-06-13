@@ -115,6 +115,7 @@ class TestMatchVoiceprintsAutoAdd:
         mock_item.file_path = "/tmp/test.wav"
         mock_item.file_name = "test.wav"
         handler._app.file_manager.files = [mock_item]
+        handler._current_batch_paths = {"/tmp/test.wav"}
 
         with patch('os.path.exists', return_value=True), \
              patch('gui.transcription.apply_speaker_mapping'):
@@ -189,14 +190,16 @@ class TestMatchVoiceprintsAutoAdd:
         mock_item.speaker_names = {"0": "Speaker 0"}
         mock_item.file_path = "/tmp/test.wav"
         handler._app.file_manager.files = [mock_item]
+        handler._current_batch_paths = {"/tmp/test.wav"}
 
         with patch('os.path.exists', return_value=True), \
              patch('gui.transcription.apply_speaker_mapping'):
             # 不应抛出异常
             handler._match_voiceprints()
 
-        # 匹配仍然完成
-        handler._app._log.assert_any_call("音色库匹配完成: 1 位说话人已识别")
+        # 匹配仍然完成（检查 log_message 信号被发射）
+        # log_message 是 Signal，不是 MagicMock，所以检查 _voiceprint_match_results
+        assert handler._voiceprint_match_results == {0: {"name": "张三", "confidence": "confirmed"}}
 
 
 class TestQualityEstimation:

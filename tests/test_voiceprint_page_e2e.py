@@ -21,7 +21,7 @@ class TestVoiceprintPageE2E:
     def test_app_has_voiceprint_page(self):
         """测试 App 有 VoiceprintPage"""
         from gui.app import MeetScribeApp
-        assert hasattr(MeetScribeApp, '_switch_page')
+        assert hasattr(MeetScribeApp, '_on_navigate')
 
     def test_voiceprint_page_has_required_methods(self):
         """测试 VoiceprintPage 有必需的方法"""

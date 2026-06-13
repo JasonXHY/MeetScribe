@@ -19,27 +19,27 @@ class TestFileList:
         from gui.home_page import HomePage
         assert hasattr(HomePage, 'refresh_file_list')
 
-    def test_home_page_has_toggle_select(self):
-        """测试 HomePage 有 _toggle_file_select 方法"""
-        from gui.home_page import HomePage
-        assert hasattr(HomePage, '_toggle_file_select')
+    def test_file_list_view_has_toggle_select(self):
+        """测试 FileListView 有 _toggle_select 方法"""
+        from gui.file_list_view import FileListView
+        assert hasattr(FileListView, '_toggle_select')
 
-    def test_home_page_has_update_row_selection(self):
-        """测试 HomePage 有 _update_row_selection 方法"""
-        from gui.home_page import HomePage
-        assert hasattr(HomePage, '_update_row_selection')
+    def test_file_list_view_has_update_action_buttons(self):
+        """测试 FileListView 有 _update_action_buttons_state 方法"""
+        from gui.file_list_view import FileListView
+        assert hasattr(FileListView, '_update_action_buttons_state')
 
-    def test_home_page_has_create_file_row(self):
-        """测试 HomePage 有 _create_file_row 方法"""
-        from gui.home_page import HomePage
-        assert hasattr(HomePage, '_create_file_row')
+    def test_file_list_view_has_create_file_row(self):
+        """测试 FileListView 有 _create_file_row 方法"""
+        from gui.file_list_view import FileListView
+        assert hasattr(FileListView, '_create_file_row')
 
-    def test_home_page_has_destroy_file_row(self):
-        """测试 HomePage 有 _destroy_file_row 方法"""
-        from gui.home_page import HomePage
-        assert hasattr(HomePage, '_destroy_file_row')
+    def test_file_list_view_has_destroy_file_row(self):
+        """测试 FileListView 有 _destroy_file_row 方法"""
+        from gui.file_list_view import FileListView
+        assert hasattr(FileListView, '_destroy_file_row')
 
-    def test_home_page_has_update_file_row(self):
-        """测试 HomePage 有 _update_file_row 方法"""
-        from gui.home_page import HomePage
-        assert hasattr(HomePage, '_update_file_row')
+    def test_file_list_view_has_update_file_row(self):
+        """测试 FileListView 有 _update_file_row 方法"""
+        from gui.file_list_view import FileListView
+        assert hasattr(FileListView, '_update_file_row')

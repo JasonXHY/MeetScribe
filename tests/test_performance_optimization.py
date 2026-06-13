@@ -2,49 +2,22 @@
 # -*- coding: utf-8 -*-
 """
 性能优化测试：按钮增量更新机制
+
+注意：此文件原本测试 customtkinter 版本的代码。
+由于项目已迁移到 PySide6，这些测试需要重写。
+当前标记为跳过，待重写后启用。
 """
 
 import pytest
-import queue
-import threading
-import customtkinter as ctk
-from unittest.mock import MagicMock, patch
 import sys
 import os
+
+# 跳过整个文件 - 需要 customtkinter（旧版依赖）
+pytestmark = pytest.mark.skip(reason="需要 customtkinter（旧版依赖），待重写为 PySide6")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from file_manager import AudioFile, FileStatus
-
-
-@pytest.fixture(scope="module")
-def tk_root():
-    """Module-scoped Tk root to avoid multiple CTk instantiation"""
-    root = ctk.CTk()
-    root.withdraw()
-    yield root
-    root.destroy()
-
-
-@pytest.fixture(scope="function")
-def home_page(tk_root):
-    """Create a fresh HomePage for each test"""
-    for child in tk_root.winfo_children():
-        child.destroy()
-
-    mock_app = MagicMock()
-    mock_app.config = MagicMock()
-    mock_app.config.get = MagicMock(return_value="mic")
-    mock_app.file_manager = MagicMock()
-    mock_app.file_manager.files = []
-    mock_app._transcription_handler = MagicMock()
-    mock_app._transcription_handler.get_queue_position = MagicMock(return_value=0)
-    mock_app._transcription_handler.get_queue = MagicMock(return_value=[])
-    mock_app._transcription_handler.is_transcribing = False
-
-    from gui.home_page import HomePage
-    page = HomePage(tk_root, app=mock_app)
-    return page
 
 
 def _make_file(file_path="test.wav", status=FileStatus.PENDING, result_path=None):
