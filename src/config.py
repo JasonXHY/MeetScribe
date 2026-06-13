@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+MeetScribe 配置管理
+JSON 文件持久化，带默认值
+"""
+
+import os
+import json
+import logging
+
+logger = logging.getLogger("MeetScribe")
+
+# 默认配置
+DEFAULTS = {
+    "recording_dir": r"C:\MeetScribe\recordings",
+    "transcript_dir": r"C:\MeetScribe\transcripts",
+    "output_format": "llm-md",
+    "speaker_names": {},
+    "auto_transcribe": True,
+    "auto_open_result": True,
+    "auto_correction": False,
+    "asr_engine": "SenseVoice",
+    "recording_mode": "dual",  # mic / dual (默认线上会议)
+    "use_vb_cable": False,  # 使用 VB-Audio Cable 虚拟音频设备
+    "window_width": 1000,
+    "window_height": 700,
+}
+
+
+class Config:
+    """应用配置管理
+
+    所有配置项通过 DEFAULTS 字典定义，使用 get()/set() 访问。
+    IDE 类型提示通过 TYPE_HINTS 字典提供（不影响运行时）。
+    """
+
+    # 类型提示（仅用于 IDE 补全，不影响运行时行为）
+    TYPE_HINTS: dict = {
+        "recording_dir": str,
+        "transcript_dir": str,
+        "output_format": str,
+        "speaker_names": dict,
+        "auto_transcribe": bool,
+        "auto_open_result": bool,
+        "auto_correction": bool,
+        "asr_engine": str,
+        "recording_mode": str,
+        "use_vb_cable": bool,
+        "window_width": int,
+        "window_height": int,
+    }
+
+    @staticmethod
+    def _get_default_path():
+        return os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "config", "settings.json"
+        )
+
+    def __init__(self, config_path=None):
+        self._path = config_path or self._get_default_path()
+        self._data = dict(DEFAULTS)
+        self._load()
+
+    def _load(self):
+        """从文件加载配置"""
+        if os.path.exists(self._path):
+            try:
+                with open(self._path, "r", encoding="utf-8") as f:
+                    saved = json.load(f)
+                self._data.update(saved)
+                logger.info(f"Config loaded from {self._path}")
+            except Exception as e:
+                logger.warning(f"Failed to load config: {e}, using defaults")
+        else:
+            logger.info("No config file found, using defaults")
+
+        # 向后兼容：旧版 mimo 配置 → 新版 ai 配置
+        if "mimo_api_key" in self._data and "ai_vendor" not in self._data:
+            old_key = self._data.get("mimo_api_key", "")
+            old_model = self._data.get("mimo_model", "mimo-v2.5-pro")
+
+            # 模型名映射表
+            model_map = {
+                "mimo-v2.5-pro": ("小米", "MiMo-V2.5-Pro"),
+                "mimo-v2.5": ("小米", "MiMo-V2.5"),
+                "mimo-v2-flash": ("小米", "MiMo-V2-Flash"),
+            }
+            vendor, model = model_map.get(old_model, ("小米", "MiMo-V2.5-Pro"))
+
+            self._data["ai_vendor"] = vendor
+            self._data["ai_model"] = model
+            self._data["ai_access_mode"] = "按量计费"
+            self._data["ai_api_key"] = old_key
+            self.save()
+            logger.info(f"配置已自动迁移: 旧版 mimo 格式 → 新版 ai 格式")
+
+    def save(self):
+        """保存配置到文件（原子写入）"""
+        import tempfile
+
+        os.makedirs(os.path.dirname(self._path), exist_ok=True)
+        try:
+            dir_name = os.path.dirname(self._path)
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=dir_name, delete=False) as f:
+                json.dump(self._data, f, ensure_ascii=False, indent=2)
+                temp_path = f.name
+
+            # 原子替换
+            os.replace(temp_path, self._path)
+            logger.info(f"Config saved to {self._path}")
+        except Exception as e:
+            # 清理临时文件
+            if 'temp_path' in locals() and os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise
+
+    def get(self, key, default=None):
+        return self._data.get(key, default)
+
+    def set(self, key, value, save=True):
+        """设置配置值
+
+        Args:
+            key: 配置键
+            value: 配置值
+            save: 是否立即保存到文件（批量操作时可设为 False）
+        """
+        self._data[key] = value
+        if save:
+            self.save()
+
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(name)
+        if name in self._data:
+            return self._data[name]
+        raise AttributeError(f"Config has no attribute '{name}'")
+
+    def as_dict(self):
+        return dict(self._data)

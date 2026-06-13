@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Recordings and transcripts (user data)
+recordings/
+transcripts/
+
+# Model cache
+models_cache/
+
+# Node.js
+node_modules/
+package-lock.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.old
+
+# Config with secrets
+config/settings.json
+
+# Runtime data
+data/
+
+# Pytest cache
+.pytest_cache/
+
+# MiMoCode
+.mimocode/
+
+# Docs archive (keep in separate branch)
+docs/archive/
