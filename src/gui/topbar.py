@@ -105,7 +105,8 @@ class TopBar(QFrame):
         layout.addStretch()
 
         # Version label
-        version_label = QLabel(f"v{APP_VERSION} | FunASR")
+        from gui.styles import APP_NAME_EN
+        version_label = QLabel(f"{APP_NAME_EN} v{APP_VERSION}")
         version_label.setStyleSheet(f"""
             QLabel {{
                 color: {C_TXT3};

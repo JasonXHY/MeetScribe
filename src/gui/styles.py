@@ -20,9 +20,10 @@ C_TXT3       = "#757575"
 C_BTN_HOVER  = "#005BA1"
 
 # ── Constants ────────────────────────────────────────────────
-APP_VERSION  = "0.9"
+APP_VERSION  = "1.0"
 APP_NAME     = "侧耳倾听"
-FONT_FAMILY  = "Segoe UI"
+APP_NAME_EN  = "MeetScribe"
+FONT_FAMILY  = "Microsoft YaHei, Segoe UI, sans-serif"
 TOPBAR_H     = 44
 ASSETS_DIR   = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
 ICON_PNG     = os.path.join(ASSETS_DIR, "icon.png")
@@ -209,6 +210,7 @@ QComboBox {{
     border: 1px solid {C_BORDER};
     border-radius: 6px;
     padding: 4px 8px;
+    padding-right: 24px;
     font-family: {FONT_FAMILY};
     font-size: 12px;
     background-color: #F0F0F0;
@@ -220,12 +222,15 @@ QComboBox:hover {{
 QComboBox::drop-down {{
     border: none;
     width: 24px;
+    subcontrol-position: center right;
 }}
 QComboBox::down-arrow {{
     image: none;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 5px solid {C_TXT2};
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid {C_TXT2};
     margin-right: 8px;
 }}
 QComboBox QAbstractItemView {{
@@ -279,16 +284,17 @@ QCheckBox {{
 QCheckBox::indicator {{
     width: 16px;
     height: 16px;
-    border: 1px solid {C_BORDER};
+    border: 1px solid #B0B0B0;
     border-radius: 3px;
     background-color: white;
 }}
 QCheckBox::indicator:checked {{
-    background-color: {C_ACCENT};
+    background-color: white;
     border-color: {C_ACCENT};
+    image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 6l3 3 5-5' stroke='%230067C0' stroke-width='2' fill='none'/%3E%3C/svg%3E");
 }}
 QCheckBox::indicator:hover {{
-    border-color: #B0B0B0;
+    border-color: {C_ACCENT};
 }}
 
 /* RadioButton */

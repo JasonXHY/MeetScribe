@@ -473,28 +473,23 @@ class VoiceprintPage(QWidget):
         layout.addWidget(splitter, 1)
 
         # 底部信息
-        info_frame = QFrame()
-        info_frame.setStyleSheet(f"""
-            QFrame {{ background-color: {C_CARD}; border: 1px solid {C_BORDER};
-                border-radius: 8px; }}
-        """)
-        info_layout = QHBoxLayout(info_frame)
-        info_layout.setContentsMargins(12, 8, 12, 8)
+        info_layout = QHBoxLayout()
+        info_layout.setContentsMargins(4, 8, 4, 0)
 
         info_label = QLabel("音色库用于识别已注册的说话人，转写时自动匹配")
         info_label.setStyleSheet(f"""
-            QLabel {{ color: {C_TXT3}; font-size: 11px; }}
+            QLabel {{ color: {C_TXT3}; font-size: 11px; background: transparent; border: none; }}
         """)
         info_layout.addWidget(info_label)
         info_layout.addStretch()
 
         self._count_label = QLabel("共 0 个说话人")
         self._count_label.setStyleSheet(f"""
-            QLabel {{ color: {C_TXT3}; font-size: 11px; }}
+            QLabel {{ color: {C_TXT3}; font-size: 11px; background: transparent; border: none; }}
         """)
         info_layout.addWidget(self._count_label)
 
-        layout.addWidget(info_frame)
+        layout.addLayout(info_layout)
 
     def refresh_list(self):
         """刷新说话人列表"""

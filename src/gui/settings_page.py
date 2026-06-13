@@ -186,14 +186,23 @@ class SettingsPage(QWidget):
         self._model_combo.setFixedWidth(180)
         self._form_row(group, "摘要模型", self._model_combo)
 
-        api_key_widget = QHBoxLayout()
-        api_key_widget.setSpacing(4)
         self._api_key_entry = QLineEdit()
         self._api_key_entry.setEchoMode(QLineEdit.Password)
-        self._api_key_entry.setFixedWidth(260)
+        self._api_key_entry.setStyleSheet(f"""
+            QLineEdit {{
+                border: 1px solid {C_BORDER};
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-family: {FONT_FAMILY};
+                font-size: 12px;
+                background-color: white;
+            }}
+            QLineEdit:focus {{
+                border-color: {C_ACCENT};
+            }}
+        """)
         api_key = self._config.get("mimo_api_key", "") if self._config else ""
         self._api_key_entry.setText(api_key)
-        api_key_widget.addWidget(self._api_key_entry)
         self._api_key_toggle = QPushButton("👁")
         self._api_key_toggle.setFixedSize(30, 30)
         self._api_key_toggle.setStyleSheet(f"""
@@ -205,9 +214,13 @@ class SettingsPage(QWidget):
         """)
         self._api_key_toggle.setCursor(Qt.PointingHandCursor)
         self._api_key_toggle.clicked.connect(self._toggle_api_key)
-        api_key_widget.addWidget(self._api_key_toggle)
+        
+        api_key_row = QHBoxLayout()
+        api_key_row.setSpacing(4)
+        api_key_row.addWidget(self._api_key_entry, 1)
+        api_key_row.addWidget(self._api_key_toggle)
         api_key_container = QWidget()
-        api_key_container.setLayout(api_key_widget)
+        api_key_container.setLayout(api_key_row)
         api_key_container.setStyleSheet("background: transparent; border: none;")
         self._form_row(group, "API Key", api_key_container)
 
@@ -269,11 +282,13 @@ class SettingsPage(QWidget):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
         self._btn_check_models = QPushButton("检查模型")
-        self._btn_check_models.setFixedSize(100, 32)
+        self._btn_check_models.setFixedHeight(32)
         self._btn_check_models.setStyleSheet(f"""
             QPushButton {{
                 background-color: {C_ACCENT}; color: white;
-                border: none; border-radius: 6px; font-size: 12px;
+                border: none; border-radius: 6px;
+                font-family: {FONT_FAMILY}; font-size: 12px; font-weight: bold;
+                padding: 0 12px;
             }}
             QPushButton:hover {{ background-color: {C_BTN_HOVER}; }}
         """)
@@ -282,23 +297,18 @@ class SettingsPage(QWidget):
         btn_row.addWidget(self._btn_check_models)
 
         self._btn_download_models = QPushButton("下载缺失模型")
-        self._btn_download_models.setFixedWidth(120)
+        self._btn_download_models.setFixedHeight(32)
         self._btn_download_models.setStyleSheet(f"""
             QPushButton {{
                 background-color: {C_SUCCESS};
                 color: white;
                 border: none;
                 border-radius: 6px;
-                padding: 4px 10px;
-                font-size: 12px;
-                font-weight: bold;
+                font-family: {FONT_FAMILY}; font-size: 12px; font-weight: bold;
+                padding: 0 12px;
             }}
-            QPushButton:hover {{
-                background-color: #0A5E0A;
-            }}
-            QPushButton:disabled {{
-                background-color: {C_TXT3};
-            }}
+            QPushButton:hover {{ background-color: #0A5E0A; }}
+            QPushButton:disabled {{ background-color: {C_TXT3}; }}
         """)
         self._btn_download_models.setCursor(Qt.PointingHandCursor)
         self._btn_download_models.clicked.connect(self._download_missing_models)
@@ -415,6 +425,7 @@ class SettingsPage(QWidget):
             hint_row.setSpacing(12)
             placeholder = QLabel("")
             placeholder.setFixedWidth(90)
+            placeholder.setStyleSheet("background: transparent; border: none;")
             hint_row.addWidget(placeholder)
             hint = QLabel(hint_text)
             hint.setStyleSheet(f"""
