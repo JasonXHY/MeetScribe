@@ -15,8 +15,9 @@ from PySide6.QtGui import QFont
 from gui.styles import (
     C_BG, C_CARD, C_BORDER, C_ACCENT, C_BTN_HOVER, C_SUCCESS, C_ERROR,
     C_TXT1, C_TXT2, C_TXT3, C_WARN, FONT_FAMILY, MODEL_CACHE_DIR,
-    APP_VERSION, APP_NAME,
+    APP_VERSION, APP_NAME, APP_NAME_EN,
 )
+from gui.icons import icon_api_key_visible, icon_api_key_hidden, IconColors
 
 logger = logging.getLogger("MeetScribe")
 
@@ -100,23 +101,7 @@ class SettingsPage(QWidget):
         save_btn_row.setContentsMargins(0, 8, 0, 20)
         save_btn = QPushButton("保存设置")
         save_btn.setFixedSize(140, 36)
-        save_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {C_ACCENT};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-family: {FONT_FAMILY};
-                font-size: 13px;
-            }}
-            QPushButton:hover {{
-                background-color: {C_BTN_HOVER};
-            }}
-            QPushButton:pressed {{
-                background-color: #004A8C;
-            }}
-        """)
+        save_btn.setProperty("cssClass", "primary")
         save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.clicked.connect(self._on_save)
         save_btn_row.addWidget(save_btn)
@@ -205,14 +190,16 @@ class SettingsPage(QWidget):
         """)
         api_key = self._config.get("mimo_api_key", "") if self._config else ""
         self._api_key_entry.setText(api_key)
-        self._api_key_toggle = QPushButton("👁")
+        self._api_key_toggle = QPushButton()
         self._api_key_toggle.setFixedSize(30, 30)
+        self._api_key_toggle.setIcon(icon_api_key_visible())
+        self._api_key_toggle.setIconSize(QSize(16, 16))
         self._api_key_toggle.setStyleSheet(f"""
             QPushButton {{
-                background-color: {C_BG}; color: {C_TXT2};
-                border: 1px solid {C_BORDER}; border-radius: 6px; font-size: 14px;
+                background-color: transparent; border: none;
+                border-radius: 4px;
             }}
-            QPushButton:hover {{ background-color: #EAEAEA; }}
+            QPushButton:hover {{ background-color: #F3F4F6; }}
         """)
         self._api_key_toggle.setCursor(Qt.PointingHandCursor)
         self._api_key_toggle.clicked.connect(self._toggle_api_key)
@@ -257,10 +244,10 @@ class SettingsPage(QWidget):
     def _toggle_api_key(self):
         if self._api_key_entry.echoMode() == QLineEdit.Password:
             self._api_key_entry.setEchoMode(QLineEdit.Normal)
-            self._api_key_toggle.setText("🔒")
+            self._api_key_toggle.setIcon(icon_api_key_hidden())
         else:
             self._api_key_entry.setEchoMode(QLineEdit.Password)
-            self._api_key_toggle.setText("👁")
+            self._api_key_toggle.setIcon(icon_api_key_visible())
 
     def _build_model_section(self, layout):
         """模型管理（含模型详情列表 + 下载按钮）"""
@@ -285,33 +272,14 @@ class SettingsPage(QWidget):
         btn_row.setSpacing(8)
         self._btn_check_models = QPushButton("检查模型")
         self._btn_check_models.setFixedHeight(32)
-        self._btn_check_models.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {C_ACCENT}; color: white;
-                border: none; border-radius: 6px;
-                font-family: {FONT_FAMILY}; font-size: 12px; font-weight: bold;
-                padding: 0 12px;
-            }}
-            QPushButton:hover {{ background-color: {C_BTN_HOVER}; }}
-        """)
+        self._btn_check_models.setProperty("cssClass", "primary")
         self._btn_check_models.setCursor(Qt.PointingHandCursor)
         self._btn_check_models.clicked.connect(self._check_models)
         btn_row.addWidget(self._btn_check_models)
 
         self._btn_download_models = QPushButton("下载缺失模型")
         self._btn_download_models.setFixedHeight(32)
-        self._btn_download_models.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {C_SUCCESS};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-family: {FONT_FAMILY}; font-size: 12px; font-weight: bold;
-                padding: 0 12px;
-            }}
-            QPushButton:hover {{ background-color: #0A5E0A; }}
-            QPushButton:disabled {{ background-color: {C_TXT3}; }}
-        """)
+        self._btn_download_models.setProperty("cssClass", "success")
         self._btn_download_models.setCursor(Qt.PointingHandCursor)
         self._btn_download_models.clicked.connect(self._download_missing_models)
         btn_row.addWidget(self._btn_download_models)
@@ -355,7 +323,7 @@ class SettingsPage(QWidget):
 
         group.layout().addSpacing(4)
 
-        dev_info = QLabel("制作者：刘家诚")
+        dev_info = QLabel(f"制作者：刘家诚 | {APP_NAME_EN}")
         dev_info.setStyleSheet(f"color: {C_TXT2}; font-size: 12px; background: transparent; border: none;")
         group.layout().addWidget(dev_info)
 
