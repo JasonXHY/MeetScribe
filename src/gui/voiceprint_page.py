@@ -83,20 +83,23 @@ class AddVoiceDialog(QDialog):
         title = QLabel("添加新说话人")
         title.setStyleSheet(f"""
             QLabel {{ color: {C_TXT1}; font-family: {FONT_FAMILY};
-                font-size: 16px; font-weight: bold; }}
+                font-size: 16px; font-weight: bold;
+                background: transparent; border: none; }}
         """)
         layout.addWidget(title)
 
         subtitle = QLabel("录音朗读以下文本，系统将自动提取声纹")
         subtitle.setStyleSheet(f"""
-            QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY}; font-size: 11px; }}
+            QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY};
+                font-size: 11px; background: transparent; border: none; }}
         """)
         layout.addWidget(subtitle)
-        layout.addSpacing(4)
+        layout.addSpacing(8)
 
         name_label = QLabel("说话人姓名")
         name_label.setStyleSheet(f"""
-            QLabel {{ color: {C_TXT2}; font-family: {FONT_FAMILY}; font-size: 12px; }}
+            QLabel {{ color: {C_TXT2}; font-family: {FONT_FAMILY};
+                font-size: 12px; background: transparent; border: none; }}
         """)
         layout.addWidget(name_label)
 
@@ -113,7 +116,7 @@ class AddVoiceDialog(QDialog):
 
         text_card = QFrame()
         text_card.setStyleSheet(f"""
-            QFrame {{ background-color: {C_CARD}; border: 1px solid {C_BORDER};
+            QFrame {{ background-color: {C_BG}; border: 1px solid {C_BORDER};
                 border-radius: 6px; }}
         """)
         text_card_layout = QVBoxLayout(text_card)
@@ -379,22 +382,44 @@ class VoiceprintPage(QWidget):
                 border-radius: 8px; }}
         """)
         left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(12, 12, 12, 12)
-        left_layout.setSpacing(8)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(0)
+
+        left_header = QFrame()
+        left_header.setStyleSheet(f"""
+            QFrame {{ background-color: transparent; border: none;
+                border-bottom: 1px solid {C_BORDER}; }}
+        """)
+        left_header_layout = QHBoxLayout(left_header)
+        left_header_layout.setContentsMargins(12, 10, 12, 10)
 
         list_title = QLabel("说话人列表")
         list_title.setStyleSheet(f"""
             QLabel {{ color: {C_TXT1}; font-family: {FONT_FAMILY};
-                font-size: 13px; font-weight: bold; }}
+                font-size: 13px; font-weight: bold;
+                background: transparent; border: none; }}
         """)
-        left_layout.addWidget(list_title)
+        left_header_layout.addWidget(list_title)
+        left_header_layout.addStretch()
+        left_layout.addWidget(left_header)
 
         self._speaker_list = QListWidget()
         self._speaker_list.setStyleSheet(f"""
-            QListWidget {{ background: transparent; border: none;
-                font-family: {FONT_FAMILY}; font-size: 12px; }}
-            QListWidget::item {{ padding: 8px; border-bottom: 1px solid {C_BORDER}; }}
-            QListWidget::item:selected {{ background-color: {C_ACCENT_LT}; color: {C_TXT1}; }}
+            QListWidget {{
+                background: transparent; border: none;
+                font-family: {FONT_FAMILY}; font-size: 12px;
+                outline: none;
+            }}
+            QListWidget::item {{
+                padding: 10px 12px;
+                border-bottom: 1px solid #F0F0F0;
+            }}
+            QListWidget::item:selected {{
+                background-color: {C_ACCENT_LT}; color: {C_TXT1};
+            }}
+            QListWidget::item:hover {{
+                background-color: #F5F8FF;
+            }}
         """)
         self._speaker_list.currentItemChanged.connect(self._on_speaker_select)
         left_layout.addWidget(self._speaker_list, 1)
@@ -408,24 +433,35 @@ class VoiceprintPage(QWidget):
                 border-radius: 8px; }}
         """)
         right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(12, 12, 12, 12)
-        right_layout.setSpacing(8)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+
+        self._detail_header = QFrame()
+        self._detail_header.setStyleSheet(f"""
+            QFrame {{ background-color: transparent; border: none;
+                border-bottom: 1px solid {C_BORDER}; }}
+        """)
+        detail_header_layout = QHBoxLayout(self._detail_header)
+        detail_header_layout.setContentsMargins(16, 12, 16, 12)
 
         self._detail_title = QLabel("请选择一个说话人")
         self._detail_title.setStyleSheet(f"""
-            QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY}; font-size: 18px; }}
+            QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY};
+                font-size: 14px; background: transparent; border: none; }}
         """)
-        right_layout.addWidget(self._detail_title)
+        detail_header_layout.addWidget(self._detail_title)
+        detail_header_layout.addStretch()
+        right_layout.addWidget(self._detail_header)
 
         self._detail_content = QScrollArea()
         self._detail_content.setWidgetResizable(True)
-        self._detail_content.setStyleSheet(f"QScrollArea {{ border: none; background: transparent; }}")
+        self._detail_content.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
         self._detail_widget = QWidget()
         self._detail_widget.setStyleSheet("background: transparent;")
         self._detail_layout = QVBoxLayout(self._detail_widget)
-        self._detail_layout.setContentsMargins(0, 0, 0, 0)
-        self._detail_layout.setSpacing(8)
+        self._detail_layout.setContentsMargins(16, 12, 16, 12)
+        self._detail_layout.setSpacing(12)
         self._detail_layout.addStretch()
 
         self._detail_content.setWidget(self._detail_widget)
@@ -539,57 +575,80 @@ class VoiceprintPage(QWidget):
             self._detail_layout.addWidget(btn_container)
 
             # 基本信息
-            info_group = QGroupBox("基本信息")
-            info_group.setStyleSheet(f"""
-                QGroupBox {{ font-family: {FONT_FAMILY}; font-size: 12px;
-                    font-weight: bold; color: {C_TXT1}; border: 1px solid {C_BORDER};
-                    border-radius: 6px; margin-top: 8px; padding-top: 16px; }}
-                QGroupBox::title {{ subcontrol-origin: margin; left: 12px; padding: 0 4px; }}
+            info_title = QLabel("基本信息")
+            info_title.setStyleSheet(f"""
+                QLabel {{ color: {C_TXT1}; font-family: {FONT_FAMILY};
+                    font-size: 13px; font-weight: bold;
+                    background: transparent; border: none; }}
             """)
-            info_layout = QVBoxLayout(info_group)
+            self._detail_layout.addWidget(info_title)
+
+            info_card = QFrame()
+            info_card.setStyleSheet(f"""
+                QFrame {{ background-color: {C_BG}; border: none; border-radius: 6px; }}
+            """)
+            info_card_layout = QVBoxLayout(info_card)
+            info_card_layout.setContentsMargins(12, 8, 12, 8)
+            info_card_layout.setSpacing(4)
 
             info_items = [
                 ("样本数", str(len(profile.embeddings))),
                 ("创建时间", profile.created_at[:10] if profile.created_at else "未知"),
             ]
-
             for label, value in info_items:
                 row = QHBoxLayout()
-                row.addWidget(QLabel(f"{label}:"))
-                val_label = QLabel(value)
-                val_label.setStyleSheet(f"color: {C_TXT1};")
-                row.addWidget(val_label)
+                row.setSpacing(0)
+                lbl = QLabel(label)
+                lbl.setFixedWidth(80)
+                lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 12px; background: transparent; border: none;")
+                row.addWidget(lbl)
+                val_lbl = QLabel(value)
+                val_lbl.setStyleSheet(f"color: {C_TXT1}; font-size: 12px; background: transparent; border: none;")
+                row.addWidget(val_lbl)
                 row.addStretch()
-                info_layout.addLayout(row)
+                info_card_layout.addLayout(row)
 
-            self._detail_layout.addWidget(info_group)
+            self._detail_layout.addWidget(info_card)
 
             # 声纹样本列表
-            samples_group = QGroupBox("声纹样本")
-            samples_group.setStyleSheet(f"""
-                QGroupBox {{ font-family: {FONT_FAMILY}; font-size: 12px;
-                    font-weight: bold; color: {C_TXT1}; border: 1px solid {C_BORDER};
-                    border-radius: 6px; margin-top: 8px; padding-top: 16px; }}
-                QGroupBox::title {{ subcontrol-origin: margin; left: 12px; padding: 0 4px; }}
+            samples_title = QLabel("声纹样本")
+            samples_title.setStyleSheet(f"""
+                QLabel {{ color: {C_TXT1}; font-family: {FONT_FAMILY};
+                    font-size: 13px; font-weight: bold;
+                    background: transparent; border: none; }}
             """)
-            samples_layout = QVBoxLayout(samples_group)
+            self._detail_layout.addWidget(samples_title)
+
+            samples_card = QFrame()
+            samples_card.setStyleSheet(f"""
+                QFrame {{ background-color: {C_BG}; border: none; border-radius: 6px; }}
+            """)
+            samples_layout = QVBoxLayout(samples_card)
+            samples_layout.setContentsMargins(12, 8, 12, 8)
+            samples_layout.setSpacing(4)
 
             if profile.embeddings:
                 for idx, emb in enumerate(profile.embeddings):
                     row = QHBoxLayout()
-                    row.addWidget(QLabel(f"样本 {idx + 1}"))
-                    source_label = QLabel(emb.get("source", "未知来源"))
-                    source_label.setStyleSheet(f"color: {C_TXT3};")
-                    row.addWidget(source_label)
+                    row.setSpacing(0)
+                    name_lbl = QLabel(f"样本 {idx + 1}")
+                    name_lbl.setFixedWidth(60)
+                    name_lbl.setStyleSheet(f"color: {C_TXT2}; font-size: 11px; background: transparent; border: none;")
+                    row.addWidget(name_lbl)
+                    src_lbl = QLabel(emb.get("source", "未知来源"))
+                    src_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
+                    row.addWidget(src_lbl)
                     row.addStretch()
-                    quality_label = QLabel(f"质量: {emb.get('quality', DEFAULT_SPK_QUALITY):.2f}")
-                    quality_label.setStyleSheet(f"color: {C_TXT3};")
-                    row.addWidget(quality_label)
+                    quality_lbl = QLabel(f"质量: {emb.get('quality', DEFAULT_SPK_QUALITY):.2f}")
+                    quality_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
+                    row.addWidget(quality_lbl)
                     samples_layout.addLayout(row)
             else:
-                samples_layout.addWidget(QLabel("暂无声纹样本"))
+                empty_lbl = QLabel("暂无声纹样本")
+                empty_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 12px; background: transparent; border: none;")
+                samples_layout.addWidget(empty_lbl)
 
-            self._detail_layout.addWidget(samples_group, 1)
+            self._detail_layout.addWidget(samples_card, 1)
             self._detail_layout.addStretch()
 
         except Exception as e:

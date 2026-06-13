@@ -177,6 +177,9 @@ QPushButton[cssClass="primary"] {{
 QPushButton[cssClass="primary"]:hover {{
     background-color: {C_BTN_HOVER};
 }}
+QPushButton[cssClass="primary"]:pressed {{
+    background-color: #004A8C;
+}}
 QPushButton[cssClass="primary"]:disabled {{
     background-color: {C_TXT3};
 }}
@@ -207,27 +210,29 @@ QComboBox {{
     border-radius: 6px;
     padding: 4px 8px;
     font-family: {FONT_FAMILY};
-    font-size: 11px;
+    font-size: 12px;
     background-color: #F0F0F0;
+    min-height: 22px;
 }}
 QComboBox:hover {{
     background-color: #E0E0E0;
 }}
 QComboBox::drop-down {{
     border: none;
-    width: 20px;
+    width: 24px;
 }}
 QComboBox::down-arrow {{
     image: none;
     border-left: 4px solid transparent;
     border-right: 4px solid transparent;
     border-top: 5px solid {C_TXT2};
-    margin-right: 6px;
+    margin-right: 8px;
 }}
 QComboBox QAbstractItemView {{
     background-color: white;
     border: 1px solid {C_BORDER};
     selection-background-color: {C_ACCENT_LT};
+    padding: 2px;
 }}
 
 /* ScrollArea */
@@ -269,6 +274,7 @@ QCheckBox {{
     spacing: 8px;
     font-family: {FONT_FAMILY};
     font-size: 12px;
+    color: {C_TXT1};
 }}
 QCheckBox::indicator {{
     width: 16px;
@@ -280,6 +286,9 @@ QCheckBox::indicator {{
 QCheckBox::indicator:checked {{
     background-color: {C_ACCENT};
     border-color: {C_ACCENT};
+}}
+QCheckBox::indicator:hover {{
+    border-color: #B0B0B0;
 }}
 
 /* RadioButton */

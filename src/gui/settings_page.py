@@ -96,6 +96,8 @@ class SettingsPage(QWidget):
         self._build_notification_section(self._scroll_layout)
         self._build_about_section(self._scroll_layout)
 
+        save_btn_row = QHBoxLayout()
+        save_btn_row.setContentsMargins(0, 8, 0, 20)
         save_btn = QPushButton("保存设置")
         save_btn.setFixedSize(140, 36)
         save_btn.setStyleSheet(f"""
@@ -115,7 +117,9 @@ class SettingsPage(QWidget):
         """)
         save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.clicked.connect(self._on_save)
-        self._scroll_layout.addWidget(save_btn)
+        save_btn_row.addWidget(save_btn)
+        save_btn_row.addStretch()
+        self._scroll_layout.addLayout(save_btn_row)
 
         self._scroll_layout.addStretch()
 
@@ -136,18 +140,17 @@ class SettingsPage(QWidget):
         """转写引擎设置（含四项引擎参数）"""
         group = self._create_group("转写引擎", layout)
 
-        row0 = QHBoxLayout()
-        lbl0 = QLabel("转写模式:")
-        lbl0.setStyleSheet(f"color: {C_TXT2}; font-size: 12px; background: transparent; border: none;")
-        row0.addWidget(lbl0)
         self._engine_combo = QComboBox()
         self._engine_combo.addItems(["FunASR (本地)", "MiMo ASR (云端)"])
-        self._engine_combo.setFixedWidth(200)
+        self._engine_combo.setFixedWidth(180)
         current_engine = self._config.get("transcription_engine", "funasr") if self._config else "funasr"
         self._engine_combo.setCurrentIndex(0 if current_engine == "funasr" else 1)
-        row0.addWidget(self._engine_combo)
-        row0.addStretch()
-        group.layout().addLayout(row0)
+        self._form_row(group, "转写模式", self._engine_combo)
+
+        sep = QFrame()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(f"background-color: {C_BORDER}; border: none;")
+        group.layout().addWidget(sep)
 
         engine_items = [
             ("标点恢复", ["自动 (ct-punc)", "关闭"], "_punc_var"),
@@ -156,62 +159,93 @@ class SettingsPage(QWidget):
             ("运算设备", ["CPU", "CUDA (GPU)"], "_device_var"),
         ]
         for label_text, values, attr in engine_items:
-            row = QHBoxLayout()
-            lbl = QLabel(label_text)
-            lbl.setFixedWidth(90)
-            lbl.setStyleSheet(f"color: {C_TXT2}; font-size: 12px; background: transparent; border: none;")
-            row.addWidget(lbl)
             combo = QComboBox()
             combo.addItems(values)
             combo.setFixedWidth(180)
             setattr(self, attr, combo)
-            row.addWidget(combo)
-            row.addStretch()
-            group.layout().addLayout(row)
+            self._form_row(group, label_text, combo)
 
     def _build_ai_section(self, layout):
         """AI 服务设置"""
-        group = self._create_group("AI 服务", layout)
+        group = self._create_group("AI 增强", layout)
 
-        row = QHBoxLayout()
-        label = QLabel("MiMo API Key:")
-        label.setStyleSheet(f"color: {C_TXT2}; font-size: 12px; background: transparent; border: none;")
-        row.addWidget(label)
+        try:
+            from model_registry import get_vendor_list, get_models_for_vendor
+        except ImportError:
+            get_vendor_list = lambda: ["小米"]
+            get_models_for_vendor = lambda v: ["MiMo"]
+
+        self._vendor_combo = QComboBox()
+        self._vendor_combo.addItems(get_vendor_list())
+        self._vendor_combo.setFixedWidth(180)
+        self._vendor_combo.currentTextChanged.connect(self._on_vendor_changed)
+        self._form_row(group, "模型厂商", self._vendor_combo)
+
+        self._model_combo = QComboBox()
+        self._model_combo.addItems(get_models_for_vendor("小米"))
+        self._model_combo.setFixedWidth(180)
+        self._form_row(group, "摘要模型", self._model_combo)
+
+        api_key_widget = QHBoxLayout()
+        api_key_widget.setSpacing(4)
         self._api_key_entry = QLineEdit()
-        self._api_key_entry.setFixedWidth(300)
         self._api_key_entry.setEchoMode(QLineEdit.Password)
+        self._api_key_entry.setFixedWidth(260)
         api_key = self._config.get("mimo_api_key", "") if self._config else ""
         self._api_key_entry.setText(api_key)
-        self._api_key_entry.setStyleSheet(f"""
-            QLineEdit {{
-                border: 1px solid {C_BORDER};
-                border-radius: 6px;
-                padding: 6px 10px;
-                font-family: {FONT_FAMILY};
-                font-size: 12px;
-                background-color: white;
+        api_key_widget.addWidget(self._api_key_entry)
+        self._api_key_toggle = QPushButton("👁")
+        self._api_key_toggle.setFixedSize(30, 30)
+        self._api_key_toggle.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {C_BG}; color: {C_TXT2};
+                border: 1px solid {C_BORDER}; border-radius: 6px; font-size: 14px;
             }}
-            QLineEdit:focus {{
-                border-color: {C_ACCENT};
-            }}
+            QPushButton:hover {{ background-color: #EAEAEA; }}
         """)
-        row.addWidget(self._api_key_entry)
-        row.addStretch()
-        group.layout().addLayout(row)
+        self._api_key_toggle.setCursor(Qt.PointingHandCursor)
+        self._api_key_toggle.clicked.connect(self._toggle_api_key)
+        api_key_widget.addWidget(self._api_key_toggle)
+        api_key_container = QWidget()
+        api_key_container.setLayout(api_key_widget)
+        api_key_container.setStyleSheet("background: transparent; border: none;")
+        self._form_row(group, "API Key", api_key_container)
 
-        row2 = QHBoxLayout()
-        self._ai_summary_cb = QCheckBox("启用 AI 摘要")
-        self._ai_summary_cb.setChecked(self._config.get("ai_summary_enabled", True) if self._config else True)
-        row2.addWidget(self._ai_summary_cb)
-        row2.addStretch()
-        group.layout().addLayout(row2)
+        self._access_mode_combo = QComboBox()
+        self._access_mode_combo.addItems(["Token Plan", "按量计费"])
+        self._access_mode_combo.setFixedWidth(180)
+        self._form_row(group, "接入模式", self._access_mode_combo,
+                       hint_text="Token Plan = 包月套餐 | 按量计费 = 按用量付费")
 
-        row3 = QHBoxLayout()
-        self._ai_correction_cb = QCheckBox("启用 AI 纠错")
-        self._ai_correction_cb.setChecked(self._config.get("ai_correction_enabled", True) if self._config else True)
-        row3.addWidget(self._ai_correction_cb)
-        row3.addStretch()
-        group.layout().addLayout(row3)
+        self._ollama_combo = QComboBox()
+        self._ollama_combo.addItems(["关闭", "Ollama (本地)"])
+        self._ollama_combo.setFixedWidth(180)
+        self._form_row(group, "本地 LLM", self._ollama_combo)
+
+        self._auto_summary_combo = QComboBox()
+        self._auto_summary_combo.addItems(["关闭", "转写后自动生成", "手动触发"])
+        self._auto_summary_combo.setFixedWidth(180)
+        self._form_row(group, "自动摘要", self._auto_summary_combo)
+
+        self._auto_correction_combo = QComboBox()
+        self._auto_correction_combo.addItems(["关闭", "转写后自动纠错"])
+        self._auto_correction_combo.setFixedWidth(180)
+        self._form_row(group, "转写纠错", self._auto_correction_combo,
+                       hint_text="LLM 纠错转写错字、乱码、标点")
+
+    def _on_vendor_changed(self, vendor):
+        from model_registry import get_models_for_vendor
+        models = get_models_for_vendor(vendor)
+        self._model_combo.clear()
+        self._model_combo.addItems(models if models else [])
+
+    def _toggle_api_key(self):
+        if self._api_key_entry.echoMode() == QLineEdit.Password:
+            self._api_key_entry.setEchoMode(QLineEdit.Normal)
+            self._api_key_toggle.setText("🔒")
+        else:
+            self._api_key_entry.setEchoMode(QLineEdit.Password)
+            self._api_key_toggle.setText("👁")
 
     def _build_model_section(self, layout):
         """模型管理（含模型详情列表 + 下载按钮）"""
@@ -233,20 +267,15 @@ class SettingsPage(QWidget):
         group.layout().addWidget(self._model_status_frame)
 
         btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
         self._btn_check_models = QPushButton("检查模型")
-        self._btn_check_models.setFixedWidth(100)
+        self._btn_check_models.setFixedSize(100, 32)
         self._btn_check_models.setStyleSheet(f"""
             QPushButton {{
-                background-color: transparent;
-                color: {C_TXT2};
-                border: 1px solid {C_BORDER};
-                border-radius: 6px;
-                padding: 4px 8px;
-                font-size: 11px;
+                background-color: {C_ACCENT}; color: white;
+                border: none; border-radius: 6px; font-size: 12px;
             }}
-            QPushButton:hover {{
-                background-color: #F5F5F5;
-            }}
+            QPushButton:hover {{ background-color: {C_BTN_HOVER}; }}
         """)
         self._btn_check_models.setCursor(Qt.PointingHandCursor)
         self._btn_check_models.clicked.connect(self._check_models)
@@ -312,9 +341,13 @@ class SettingsPage(QWidget):
         about_info.setStyleSheet(f"color: {C_TXT1}; font-size: 13px; font-weight: bold; background: transparent; border: none;")
         group.layout().addWidget(about_info)
 
+        group.layout().addSpacing(4)
+
         dev_info = QLabel("制作者：刘家诚")
         dev_info.setStyleSheet(f"color: {C_TXT2}; font-size: 12px; background: transparent; border: none;")
         group.layout().addWidget(dev_info)
+
+        group.layout().addSpacing(4)
 
         for line in [
             "引擎: FunASR SenseVoice + CAM++ + ct-punc (本地推理)",
@@ -322,11 +355,12 @@ class SettingsPage(QWidget):
             "支持格式: WAV / MP3 / M4A / FLAC / OGG / OGA / OPUS",
         ]:
             lbl = QLabel(line)
-            lbl.setStyleSheet(f"color: {C_TXT2}; font-size: 12px; background: transparent; border: none;")
+            lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
             group.layout().addWidget(lbl)
 
     def _create_group(self, title, layout):
         """创建分组卡片（标题在卡片外面）"""
+        layout.addSpacing(8)
         title_lbl = QLabel(f"  {title}")
         title_lbl.setStyleSheet(f"""
             QLabel {{
@@ -351,9 +385,50 @@ class SettingsPage(QWidget):
         """)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(16, 12, 16, 12)
-        card_layout.setSpacing(6)
+        card_layout.setSpacing(8)
         layout.addWidget(card)
         return card
+
+    def _form_row(self, parent, label_text, control_widget, hint_text=None):
+        """创建标准表单行：标签(90px右对齐) + 控件 + [可选提示]"""
+        row = QHBoxLayout()
+        row.setSpacing(12)
+
+        lbl = QLabel(label_text)
+        lbl.setFixedWidth(90)
+        lbl.setStyleSheet(f"""
+            color: {C_TXT2};
+            font-family: {FONT_FAMILY};
+            font-size: 12px;
+            background: transparent;
+            border: none;
+        """)
+        lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        row.addWidget(lbl)
+
+        row.addWidget(control_widget)
+        row.addStretch()
+        parent.layout().addLayout(row)
+
+        if hint_text:
+            hint_row = QHBoxLayout()
+            hint_row.setSpacing(12)
+            placeholder = QLabel("")
+            placeholder.setFixedWidth(90)
+            hint_row.addWidget(placeholder)
+            hint = QLabel(hint_text)
+            hint.setStyleSheet(f"""
+                color: {C_TXT3};
+                font-family: {FONT_FAMILY};
+                font-size: 10px;
+                background: transparent;
+                border: none;
+            """)
+            hint_row.addWidget(hint)
+            hint_row.addStretch()
+            parent.layout().addLayout(hint_row)
+
+        return control_widget
 
     def _create_path_row(self, parent, label_text, default_value):
         """创建路径输入行"""
@@ -433,24 +508,24 @@ class SettingsPage(QWidget):
             row.addWidget(icon_lbl)
 
             name_lbl = QLabel(model_id)
-            name_lbl.setFixedWidth(140)
+            name_lbl.setFixedWidth(160)
             name_lbl.setStyleSheet(f"color: {C_TXT1}; font-size: 12px; font-weight: bold; background: transparent; border: none;")
             row.addWidget(name_lbl)
 
             desc_lbl = QLabel(state["info"]["description"])
             desc_lbl.setStyleSheet(f"color: {C_TXT2}; font-size: 11px; background: transparent; border: none;")
-            row.addWidget(desc_lbl)
+            row.addWidget(desc_lbl, 1)
 
             size_lbl = QLabel(state["info"]["size_hint"])
             size_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
+            size_lbl.setFixedWidth(60)
             row.addWidget(size_lbl)
 
             status_text = "已缓存" if state["cached"] else ("必需" if state["info"]["required"] else "可选")
             status_lbl = QLabel(status_text)
             status_lbl.setStyleSheet(f"color: {color}; font-size: 11px; background: transparent; border: none;")
+            status_lbl.setFixedWidth(40)
             row.addWidget(status_lbl)
-
-            row.addStretch()
 
             container = QWidget()
             container.setLayout(row)
@@ -521,6 +596,43 @@ class SettingsPage(QWidget):
         self._vad_var.setCurrentText(self._config.get("vad_sensitivity", "适中 (推荐)"))
         self._device_var.setCurrentText(self._config.get("device", "CPU"))
 
+        if hasattr(self, '_vendor_combo'):
+            vendor = self._config.get("ai_vendor", "小米")
+            idx = self._vendor_combo.findText(vendor)
+            if idx >= 0:
+                self._vendor_combo.setCurrentIndex(idx)
+        if hasattr(self, '_model_combo'):
+            model = self._config.get("ai_model", "MiMo")
+            idx = self._model_combo.findText(model)
+            if idx >= 0:
+                self._model_combo.setCurrentIndex(idx)
+        if hasattr(self, '_access_mode_combo'):
+            mode = self._config.get("ai_access_mode", "按量计费")
+            idx = self._access_mode_combo.findText(mode)
+            if idx >= 0:
+                self._access_mode_combo.setCurrentIndex(idx)
+        if hasattr(self, '_ollama_combo'):
+            ollama = self._config.get("ollama_enabled", "关闭")
+            if isinstance(ollama, bool):
+                ollama = "Ollama (本地)" if ollama else "关闭"
+            idx = self._ollama_combo.findText(ollama)
+            if idx >= 0:
+                self._ollama_combo.setCurrentIndex(idx)
+        if hasattr(self, '_auto_summary_combo'):
+            summary = self._config.get("auto_summary", "转写后自动生成")
+            if isinstance(summary, bool):
+                summary = "转写后自动生成" if summary else "关闭"
+            idx = self._auto_summary_combo.findText(summary)
+            if idx >= 0:
+                self._auto_summary_combo.setCurrentIndex(idx)
+        if hasattr(self, '_auto_correction_combo'):
+            correction = self._config.get("auto_correction", "转写后自动纠错")
+            if isinstance(correction, bool):
+                correction = "转写后自动纠错" if correction else "关闭"
+            idx = self._auto_correction_combo.findText(correction)
+            if idx >= 0:
+                self._auto_correction_combo.setCurrentIndex(idx)
+
     def _on_save(self):
         """保存设置"""
         if not self._config:
@@ -540,15 +652,21 @@ class SettingsPage(QWidget):
         self._config.set("vad_sensitivity", self._vad_var.currentText())
         self._config.set("device", self._device_var.currentText())
 
+        if hasattr(self, '_vendor_combo'):
+            self._config.set("ai_vendor", self._vendor_combo.currentText())
+        if hasattr(self, '_model_combo'):
+            self._config.set("ai_model", self._model_combo.currentText())
         if hasattr(self, '_api_key_entry'):
             self._config.set("ai_api_key", self._api_key_entry.text().strip())
             self._config.set("mimo_api_key", self._api_key_entry.text().strip())
-        if hasattr(self, '_ai_summary_cb'):
-            self._config.set("ai_summary_enabled", self._ai_summary_cb.isChecked())
-            self._config.set("auto_summary", "转写后自动生成" if self._ai_summary_cb.isChecked() else "关闭")
-        if hasattr(self, '_ai_correction_cb'):
-            self._config.set("ai_correction_enabled", self._ai_correction_cb.isChecked())
-            self._config.set("auto_correction", "转写后自动纠错" if self._ai_correction_cb.isChecked() else "关闭")
+        if hasattr(self, '_access_mode_combo'):
+            self._config.set("ai_access_mode", self._access_mode_combo.currentText())
+        if hasattr(self, '_ollama_combo'):
+            self._config.set("ollama_enabled", self._ollama_combo.currentText())
+        if hasattr(self, '_auto_summary_combo'):
+            self._config.set("auto_summary", self._auto_summary_combo.currentText())
+        if hasattr(self, '_auto_correction_combo'):
+            self._config.set("auto_correction", self._auto_correction_combo.currentText())
 
         if hasattr(self, '_vb_cable_cb'):
             self._config.set("use_vb_cable", self._vb_cable_cb.isChecked())

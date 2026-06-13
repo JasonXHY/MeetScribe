@@ -97,7 +97,9 @@ def main():
 
         # 显示窗口
         app.show()
-        logger.info("Window shown")
+        app.raise_()
+        app.activateWindow()
+        logger.info(f"Window shown - visible: {app.isVisible()}, size: {app.size().width()}x{app.size().height()}")
 
         # 将 GUI 日志 handler 追加到 MeetScribe logger
         gui_handler = app._gui_log_handler
