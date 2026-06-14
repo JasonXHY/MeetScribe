@@ -100,6 +100,9 @@ class FileListView(QWidget):
         self._table.verticalHeader().setDefaultSectionSize(38)  # 行高
         self._table.verticalHeader().setMinimumSectionSize(38)
 
+        # 图标尺寸
+        self._table.setIconSize(QSize(6, 6))
+
         # 样式
         self._table.setStyleSheet("""
             QTableWidget {
@@ -202,7 +205,6 @@ class FileListView(QWidget):
         painter.drawEllipse(0, 0, 6, 6)
         painter.end()
         name_item.setIcon(QIcon(dot_pixmap))
-        name_item.setIconSize(QSize(6, 6))
         self._table.setItem(row, 1, name_item)
 
         # 主题
