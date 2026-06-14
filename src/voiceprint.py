@@ -25,6 +25,9 @@ HIGH_CONFIDENCE = 0.50
 # 每个说话人最多保留的嵌入向量数量（FIFO 淘汰）
 MAX_EMBEDDINGS_PER_SPEAKER = 5
 
+# 同源去重相似度阈值
+DEDUP_THRESHOLD = 0.999
+
 # 最低样本数（降低为 1，允许单次转写即可匹配）
 MIN_SAMPLES_FOR_MATCH = 1
 
@@ -56,7 +59,7 @@ class SpeakerProfile:
         """
         new_vector = vector.tolist() if isinstance(vector, np.ndarray) else vector
 
-        # 去重：同来源 + 余弦相似度 > 0.999 → 跳过
+        # 去重：同来源 + 余弦相似度 > DEDUP_THRESHOLD → 跳过
         for existing in self.embeddings:
             if existing["source"] != source:
                 continue
@@ -66,7 +69,7 @@ class SpeakerProfile:
                 similarity = np.dot(existing_vec, new_vec) / (
                     np.linalg.norm(existing_vec) * np.linalg.norm(new_vec) + 1e-8
                 )
-                if similarity > 0.999:
+                if similarity > DEDUP_THRESHOLD:
                     logger.debug(f"跳过重复嵌入: source={source}, sim={similarity:.6f}")
                     return False
 

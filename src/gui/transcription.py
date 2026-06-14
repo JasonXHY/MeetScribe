@@ -19,7 +19,7 @@ from gui.styles import MODEL_CACHE_DIR, DEFAULT_SPK_QUALITY
 from file_manager import FileStatus, TranscriptionProgress
 from transcribe_worker import transcribe_worker_process
 from transcription_queue import TranscriptionQueue, TranscriptionTask
-from utils import apply_speaker_mapping
+from utils import apply_speaker_mapping, get_summary_path
 
 logger = logging.getLogger("MeetScribe")
 
@@ -132,13 +132,17 @@ class TranscriptionHandler(QObject):
         self._sentences = []
 
         # 启动多进程转写
+        device = "cpu"
+        if self._app and hasattr(self._app, 'config'):
+            device_cfg = self._app.config.get("device", "CPU")
+            device = "cuda" if "cuda" in device_cfg.lower() else "cpu"
         self._queue = multiprocessing.Queue()
         self._process = multiprocessing.Process(
             target=transcribe_worker_process,
             args=(
                 self._queue,
                 MODEL_CACHE_DIR,
-                "cpu",
+                device,
                 task.file_paths,
                 task.fmt,
                 task.speaker_names,
@@ -278,7 +282,8 @@ class TranscriptionHandler(QObject):
                 self._process.join(timeout=2)
             self._process = None
             self._queue = None
-        except Exception:
+        except Exception as e:
+            logger.warning(f"转写进程清理异常: {e}")
             self._process = None
             self._queue = None
 
@@ -346,8 +351,8 @@ class TranscriptionHandler(QObject):
                                         apply_speaker_mapping(
                                             item.result_path, {speaker_id + 1: name}
                                         )
-                                        summary_path = item.result_path.replace("_transcript", "_summary")
-                                        if os.path.exists(summary_path):
+                                        summary_path = get_summary_path(item.result_path)
+                                        if summary_path and os.path.exists(summary_path):
                                             apply_speaker_mapping(
                                                 summary_path, {speaker_id + 1: name}
                                             )

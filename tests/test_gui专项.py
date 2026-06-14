@@ -74,7 +74,7 @@ class TestGUIComponents:
     def test_styles_constants(self):
         from gui.styles import (
             C_BG, C_CARD, C_BORDER, C_ACCENT, C_TXT1, C_TXT2, C_TXT3,
-            SPEAKER_COLORS, ICON_STATUS, ICON_ACTION, OUTPUT_FORMATS
+            SPEAKER_COLORS, OUTPUT_FORMATS
         )
         # 颜色常量
         assert C_BG.startswith("#")
@@ -84,8 +84,6 @@ class TestGUIComponents:
 
         # 列表常量
         assert len(SPEAKER_COLORS) > 0
-        assert len(ICON_STATUS) > 0
-        assert len(ICON_ACTION) > 0
         assert len(OUTPUT_FORMATS) > 0
 
     def test_speaker_colors_count(self):

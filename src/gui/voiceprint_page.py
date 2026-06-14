@@ -63,7 +63,6 @@ class AddVoiceDialog(QDialog):
         self.setWindowTitle("添加新说话人")
         self.setFixedSize(440, 360)
         self.setStyleSheet(f"QDialog {{ background-color: {C_BG}; }}")
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
         self._parent = parent
         self._on_save = on_save
@@ -279,7 +278,7 @@ class AddVoiceDialog(QDialog):
             QMessageBox.warning(self, "提示", "请输入说话人姓名")
             return
 
-        if self._embedding is None:
+        if self._temp_embedding is None:
             QMessageBox.warning(self, "提示", "请先录音提取声纹")
             return
 
@@ -287,7 +286,7 @@ class AddVoiceDialog(QDialog):
             from voiceprint import VoiceprintLibrary
 
             library = VoiceprintLibrary()
-            library.add_speaker(name, self._embedding, "manual_recording", quality=0.90)
+            library.add_speaker(name, self._temp_embedding, "manual_recording", quality=0.90)
 
             QMessageBox.information(self, "成功", f"已将说话人保存到音色库:\n{name}")
 

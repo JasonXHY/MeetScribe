@@ -52,10 +52,6 @@ class HomePage(QWidget):
         self._connect_signals()
 
     @property
-    def _file_rows(self):
-        return []
-
-    @property
     def _selected_files(self):
         return self._file_list_view.get_selected()
 
@@ -839,7 +835,7 @@ class HomePage(QWidget):
                     "name": f.file_name,
                     "topic": getattr(f, 'topic', '') or '',
                     "duration": f.duration_str if hasattr(f, 'duration_str') else self._format_duration(getattr(f, 'duration_s', 0)),
-                    "size": self._format_size(getattr(f, 'file_size', 0)),
+                    "size": f.size_str if hasattr(f, 'size_str') else self._format_size(getattr(f, 'file_size', 0)),
                     "status": status_map.get(f.status, "pending"),
                     "queue_pos": None,
                 })

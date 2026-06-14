@@ -114,31 +114,6 @@ SPEAKER_COLORS = [
     "#16A085", "#C0392B", "#2980B9", "#8E44AD",
 ]
 
-# ── Legacy Icons (for backward compatibility) ────────────────
-ICON_STATUS = {
-    "pending": "○",
-    "processing": "⏳",
-    "done": "✓",
-    "failed": "✗",
-}
-
-ICON_ACTION = {
-    "preview": "👁",
-    "open": "📂",
-    "speaker": "👤",
-    "retry": "🔄",
-    "stop": "⏹",
-    "transcribe": "▶",
-    "export": "📤",
-}
-
-ICON_COLOR = {
-    "pending": "#9CA3AF",
-    "processing": "#3B82F6",
-    "done": "#10B981",
-    "failed": "#EF4444",
-}
-
 # ── Tooltips ──────────────────────────────────────────────────
 TOOLTIPS = {
     "preview": "预览转写结果",

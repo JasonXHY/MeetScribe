@@ -12,9 +12,10 @@ import logging
 logger = logging.getLogger("MeetScribe")
 
 # 默认配置
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULTS = {
-    "recording_dir": r"C:\MeetScribe\recordings",
-    "transcript_dir": r"C:\MeetScribe\transcripts",
+    "recording_dir": os.path.join(PROJECT_ROOT, "recordings"),
+    "transcript_dir": os.path.join(PROJECT_ROOT, "transcripts"),
     "output_format": "llm-md",
     "speaker_names": {},
     "auto_transcribe": True,
@@ -32,24 +33,7 @@ class Config:
     """应用配置管理
 
     所有配置项通过 DEFAULTS 字典定义，使用 get()/set() 访问。
-    IDE 类型提示通过 TYPE_HINTS 字典提供（不影响运行时）。
     """
-
-    # 类型提示（仅用于 IDE 补全，不影响运行时行为）
-    TYPE_HINTS: dict = {
-        "recording_dir": str,
-        "transcript_dir": str,
-        "output_format": str,
-        "speaker_names": dict,
-        "auto_transcribe": bool,
-        "auto_open_result": bool,
-        "auto_correction": bool,
-        "asr_engine": str,
-        "recording_mode": str,
-        "use_vb_cable": bool,
-        "window_width": int,
-        "window_height": int,
-    }
 
     @staticmethod
     def _get_default_path():

@@ -41,13 +41,6 @@ def _make_home_page():
     return home
 
 
-def test_file_rows_property():
-    home = _make_home_page()
-    rows = home._file_rows
-    assert isinstance(rows, list), f"_file_rows should be list, got {type(rows)}"
-    print("PASS: _file_rows property works")
-
-
 def test_selected_files_property():
     home = _make_home_page()
     selected = home._selected_files

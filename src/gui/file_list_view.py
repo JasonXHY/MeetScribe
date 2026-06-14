@@ -169,6 +169,25 @@ class FileListView(QWidget):
         self._file_data = files
         self._refresh_table()
 
+        # 空状态提示
+        if not files:
+            self._table.setRowCount(0)
+            if not hasattr(self, '_empty_label'):
+                self._empty_label = QLabel("暂无文件，请点击「添加文件」导入音频")
+                self._empty_label.setAlignment(Qt.AlignCenter)
+                self._empty_label.setStyleSheet(f"""
+                    color: #9CA3AF; font-size: 13px;
+                    background: transparent; border: none;
+                """)
+                self._table.setViewportMargins(0, 40, 0, 0)
+                # 使用 overlay 方式显示空状态
+                self._empty_label.setParent(self._table)
+            self._empty_label.setGeometry(self._table.viewport().rect())
+            self._empty_label.show()
+        else:
+            if hasattr(self, '_empty_label'):
+                self._empty_label.hide()
+
     def _refresh_table(self):
         """刷新表格内容"""
         self._table.setRowCount(len(self._file_data))
