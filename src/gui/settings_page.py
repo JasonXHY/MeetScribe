@@ -344,10 +344,10 @@ class SettingsPage(QWidget):
         title_lbl = QLabel(f"  {title}")
         title_lbl.setStyleSheet(f"""
             QLabel {{
-                color: {C_TXT1};
+                color: {C_TXT2};
                 font-family: {FONT_FAMILY};
                 font-size: 13px;
-                font-weight: bold;
+                font-weight: 600;
                 background: transparent;
                 border: none;
             }}
@@ -412,11 +412,7 @@ class SettingsPage(QWidget):
         return control_widget
 
     def _create_path_row(self, parent, label_text, default_value):
-        """创建路径输入行"""
-        row = QHBoxLayout()
-        label = QLabel(f"{label_text}:")
-        label.setStyleSheet(f"color: {C_TXT2}; font-size: 12px; background: transparent; border: none;")
-        row.addWidget(label)
+        """创建路径输入行（使用 _form_row 统一样式）"""
         entry = QLineEdit(default_value)
         entry.setStyleSheet(f"""
             QLineEdit {{
@@ -427,30 +423,21 @@ class SettingsPage(QWidget):
                 background-color: white;
             }}
         """)
-        row.addWidget(entry, 1)
         browse_btn = QPushButton("浏览")
         browse_btn.setFixedWidth(64)
-        browse_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {C_BG};
-                color: {C_TXT1};
-                border: 1px solid {C_BORDER};
-                border-radius: 6px;
-                padding: 6px 8px;
-                font-size: 12px;
-            }}
-            QPushButton:hover {{
-                background-color: #EAEAEA;
-            }}
-        """)
         browse_btn.setCursor(Qt.PointingHandCursor)
         if "录音" in label_text:
             browse_btn.clicked.connect(lambda: self._browse_dir(entry, "选择录音目录"))
         else:
             browse_btn.clicked.connect(lambda: self._browse_dir(entry, "选择输出目录"))
-        row.addWidget(browse_btn)
-        row.addStretch()
-        parent.layout().addLayout(row)
+        container = QWidget()
+        container_row = QHBoxLayout(container)
+        container_row.setContentsMargins(0, 0, 0, 0)
+        container_row.setSpacing(6)
+        container_row.addWidget(entry, 1)
+        container_row.addWidget(browse_btn)
+        container.setStyleSheet("background: transparent; border: none;")
+        self._form_row(parent, label_text, container)
         return entry
 
     def _browse_dir(self, entry, title):

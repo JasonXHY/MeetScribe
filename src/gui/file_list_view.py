@@ -92,7 +92,7 @@ class FileListView(QWidget):
 
         # 表格属性
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setAlternatingRowColors(False)
         self._table.setShowGrid(False)
@@ -291,11 +291,15 @@ class FileListView(QWidget):
     def _on_selection_changed(self):
         """选中变化回调"""
         selected = self._table.selectionModel().selectedRows()
-        if selected:
-            row = selected[0].row()
+        paths = []
+        for idx in selected:
+            row = idx.row()
             if row < len(self._file_data):
                 path = self._file_data[row].get("path", "")
-                self.file_selected.emit([path])
+                if path:
+                    paths.append(path)
+        self._selected_paths = set(paths)
+        self.file_selected.emit(paths)
 
     def _on_action(self, action: str, file_path: str):
         """操作按钮回调"""
@@ -303,6 +307,10 @@ class FileListView(QWidget):
 
     def get_selected_paths(self) -> list:
         """获取选中的文件路径"""
+        return list(self._selected_paths)
+
+    def get_selected(self) -> list:
+        """获取选中的文件路径（兼容旧接口）"""
         return list(self._selected_paths)
 
     def clear_selection(self):

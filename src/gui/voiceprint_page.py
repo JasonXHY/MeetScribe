@@ -60,8 +60,8 @@ class AddVoiceDialog(QDialog):
 
     def __init__(self, parent=None, on_save=None):
         super().__init__(parent)
-        self.setWindowTitle("添加音色")
-        self.setFixedSize(480, 400)
+        self.setWindowTitle("添加新说话人")
+        self.setFixedSize(440, 360)
         self.setStyleSheet(f"QDialog {{ background-color: {C_BG}; }}")
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
@@ -340,13 +340,9 @@ class VoiceprintPage(QWidget):
         title_frame.addWidget(title)
         title_frame.addStretch()
 
-        add_btn = QPushButton("添加音色")
-        add_btn.setFixedSize(100, 32)
-        add_btn.setStyleSheet(f"""
-            QPushButton {{ background-color: {C_ACCENT}; color: white;
-                border: none; border-radius: 6px; font-size: 12px; }}
-            QPushButton:hover {{ background-color: {C_BTN_HOVER}; }}
-        """)
+        add_btn = QPushButton("+ 添加音色")
+        add_btn.setFixedSize(110, 32)
+        add_btn.setProperty("cssClass", "primary")
         add_btn.setCursor(Qt.PointingHandCursor)
         add_btn.clicked.connect(self._add_speaker)
         title_frame.addWidget(add_btn)
@@ -384,7 +380,28 @@ class VoiceprintPage(QWidget):
         """)
         left_header_layout.addWidget(list_title)
         left_header_layout.addStretch()
+        self._list_count_label = QLabel("0 人")
+        self._list_count_label.setStyleSheet(f"""
+            QLabel {{ color: {C_TXT3}; font-size: 11px;
+                background: transparent; border: none; }}
+        """)
+        left_header_layout.addWidget(self._list_count_label)
         left_layout.addWidget(left_header)
+
+        # 搜索框
+        search_row = QHBoxLayout()
+        search_row.setContentsMargins(12, 6, 12, 6)
+        self._search_entry = QLineEdit()
+        self._search_entry.setPlaceholderText("搜索说话人...")
+        self._search_entry.setFixedHeight(28)
+        self._search_entry.setStyleSheet(f"""
+            QLineEdit {{ border: 1px solid {C_BORDER}; border-radius: 4px;
+                padding: 2px 8px; font-size: 11px; background: white; color: {C_TXT1}; }}
+            QLineEdit:focus {{ border-color: {C_ACCENT}; }}
+        """)
+        self._search_entry.textChanged.connect(self._filter_speakers)
+        search_row.addWidget(self._search_entry)
+        left_layout.addLayout(search_row)
 
         self._speaker_list = QListWidget()
         self._speaker_list.setStyleSheet(f"""
@@ -430,7 +447,8 @@ class VoiceprintPage(QWidget):
         self._detail_title = QLabel("请选择一个说话人")
         self._detail_title.setStyleSheet(f"""
             QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY};
-                font-size: 13px; background: transparent; border: none; }}
+                font-size: 14px; font-weight: bold;
+                background: transparent; border: none; }}
         """)
         detail_header_layout.addWidget(self._detail_title)
         detail_header_layout.addStretch()
@@ -484,6 +502,7 @@ class VoiceprintPage(QWidget):
 
             if not speakers:
                 self._count_label.setText("共 0 个说话人")
+                self._list_count_label.setText("0 人")
                 # 添加空状态提示
                 empty_item = QListWidgetItem("暂无注册的说话人")
                 empty_item.setFlags(Qt.NoItemFlags)  # 不可选中
@@ -496,10 +515,20 @@ class VoiceprintPage(QWidget):
                 item.setData(Qt.UserRole, name)
                 self._speaker_list.addItem(item)
 
-            self._count_label.setText(f"共 {len(speakers)} 个说话人")
+            total_samples = sum(len(p.embeddings) for p in speakers.values())
+            self._count_label.setText(f"共 {len(speakers)} 个说话人，{total_samples} 个样本")
+            self._list_count_label.setText(f"{len(speakers)} 人")
 
         except Exception as e:
             logger.error(f"Failed to refresh voiceprint list: {e}")
+
+    def _filter_speakers(self, text):
+        """过滤说话人列表"""
+        text = text.strip().lower()
+        for i in range(self._speaker_list.count()):
+            item = self._speaker_list.item(i)
+            name = item.data(Qt.UserRole) or ""
+            item.setHidden(text != "" and text not in name.lower())
 
     def _on_speaker_select(self, current, previous):
         """选中说话人"""
@@ -520,6 +549,11 @@ class VoiceprintPage(QWidget):
                 return
 
             self._detail_title.setText(speaker_name)
+            self._detail_title.setStyleSheet(f"""
+                QLabel {{ color: {C_TXT1}; font-family: {FONT_FAMILY};
+                    font-size: 14px; font-weight: bold;
+                    background: transparent; border: none; }}
+            """)
 
             # 清空详情
             while self._detail_layout.count():
@@ -531,13 +565,25 @@ class VoiceprintPage(QWidget):
             btn_layout = QHBoxLayout()
             edit_btn = QPushButton("编辑")
             edit_btn.setFixedSize(60, 28)
-            edit_btn.setProperty("cssClass", "primary")
+            edit_btn.setStyleSheet(f"""
+                QPushButton {{ background-color: transparent; color: {C_TXT2};
+                    border: 1px solid {C_BORDER}; border-radius: 4px;
+                    font-size: 12px; }}
+                QPushButton:hover {{ background-color: #F3F4F6; }}
+            """)
+            edit_btn.setCursor(Qt.PointingHandCursor)
             edit_btn.clicked.connect(lambda: self._edit_speaker(speaker_name))
             btn_layout.addWidget(edit_btn)
 
             delete_btn = QPushButton("删除")
             delete_btn.setFixedSize(60, 28)
-            delete_btn.setProperty("cssClass", "danger")
+            delete_btn.setStyleSheet(f"""
+                QPushButton {{ background-color: transparent; color: {C_ERROR};
+                    border: 1px solid #FCA5A5; border-radius: 4px;
+                    font-size: 12px; }}
+                QPushButton:hover {{ background-color: #FEF2F2; }}
+            """)
+            delete_btn.setCursor(Qt.PointingHandCursor)
             delete_btn.clicked.connect(lambda: self._delete_speaker(speaker_name))
             btn_layout.addWidget(delete_btn)
             btn_layout.addStretch()
@@ -567,6 +613,9 @@ class VoiceprintPage(QWidget):
                 ("样本数", str(len(profile.embeddings))),
                 ("创建时间", profile.created_at[:10] if profile.created_at else "未知"),
             ]
+            if profile.embeddings:
+                avg_quality = sum(e.get('quality', DEFAULT_SPK_QUALITY) for e in profile.embeddings) / len(profile.embeddings)
+                info_items.append(("平均质量", f"{avg_quality:.2f}"))
             for label, value in info_items:
                 row = QHBoxLayout()
                 row.setSpacing(0)
@@ -611,8 +660,15 @@ class VoiceprintPage(QWidget):
                     src_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
                     row.addWidget(src_lbl)
                     row.addStretch()
-                    quality_lbl = QLabel(f"质量: {emb.get('quality', DEFAULT_SPK_QUALITY):.2f}")
-                    quality_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
+                    quality = emb.get('quality', DEFAULT_SPK_QUALITY)
+                    quality_color = C_SUCCESS if quality >= 0.8 else C_WARN
+                    quality_bg = "#ECFDF5" if quality >= 0.8 else "#FEF3C7"
+                    quality_lbl = QLabel(f"  {quality:.2f}  ")
+                    quality_lbl.setStyleSheet(f"""
+                        color: {quality_color}; background: {quality_bg};
+                        border-radius: 10px; font-size: 11px; font-weight: 500;
+                        padding: 2px 8px; border: none;
+                    """)
                     row.addWidget(quality_lbl)
                     samples_layout.addLayout(row)
             else:
@@ -674,6 +730,11 @@ class VoiceprintPage(QWidget):
                 self._selected_speaker = None
                 self.refresh_list()
                 self._detail_title.setText("请选择一个说话人")
+                self._detail_title.setStyleSheet(f"""
+                    QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY};
+                        font-size: 14px; font-weight: bold;
+                        background: transparent; border: none; }}
+                """)
 
                 # 清空详情
                 while self._detail_layout.count():

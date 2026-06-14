@@ -186,10 +186,11 @@ class HomePage(QWidget):
                 font-size: 12px;
             }}
             QPushButton:hover {{
-                background-color: #F5F5F5;
+                background-color: #F3F4F6;
             }}
             QPushButton:disabled {{
                 color: {C_TXT3};
+                border-color: #D1D5DB;
             }}
         """
 
@@ -526,12 +527,13 @@ class HomePage(QWidget):
         """处理文件操作"""
         action_map = {
             "preview": self._preview_result,
-            "open": self._open_folder,
+            "open_folder": self._open_folder,
             "transcribe": self._transcribe_single,
             "retry": self._retry_transcription,
             "export": self._export_result,
             "speaker": self._open_speaker_modal,
             "stop": self._stop_transcription,
+            "delete": self._delete_single,
             "move_up": self._queue_move_up,
             "move_down": self._queue_move_down,
             "remove": self._queue_remove,
@@ -586,6 +588,13 @@ class HomePage(QWidget):
                 dialog.exec()
             else:
                 QMessageBox.information(self, "提示", "结果文件不存在")
+
+    def _delete_single(self, file_path):
+        """删除单个文件"""
+        if self._app and hasattr(self._app, 'file_manager'):
+            self._app.file_manager.remove_file(file_path)
+            self._log(f"已删除: {os.path.basename(file_path)}")
+            self.refresh_file_list()
 
     def _open_folder(self, file_path):
         """打开文件所在文件夹"""
@@ -882,7 +891,9 @@ class HomePage(QWidget):
         return OUTPUT_FORMATS.get(text, "md")
 
     def _log(self, msg):
-        """添加日志"""
+        """添加日志（仅显示用户关心的信息）"""
+        if not any(kw in msg for kw in USER_FRIENDLY_KEYWORDS):
+            return
         ts = datetime.now().strftime("%H:%M:%S")
         self._log_area.appendPlainText(f"[{ts}] {msg}")
 

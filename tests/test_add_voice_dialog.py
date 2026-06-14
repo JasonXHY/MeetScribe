@@ -19,7 +19,7 @@ def test_preset_text_exists():
 def test_dialog_instantiation():
     from gui.voiceprint_page import AddVoiceDialog
     dialog = AddVoiceDialog()
-    assert dialog.windowTitle() == "添加音色"
+    assert dialog.windowTitle() == "添加新说话人"
     assert dialog._recording is False
     assert dialog._audio_path is None
     assert dialog._embedding is None
