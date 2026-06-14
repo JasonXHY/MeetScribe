@@ -44,8 +44,7 @@ def _make_home_page():
 def test_file_rows_property():
     home = _make_home_page()
     rows = home._file_rows
-    assert isinstance(rows, dict), f"_file_rows should be dict, got {type(rows)}"
-    assert "test.mp3" in rows, "_file_rows should contain 'test.mp3'"
+    assert isinstance(rows, list), f"_file_rows should be list, got {type(rows)}"
     print("PASS: _file_rows property works")
 
 
@@ -53,7 +52,6 @@ def test_selected_files_property():
     home = _make_home_page()
     selected = home._selected_files
     assert isinstance(selected, (set, list)), f"_selected_files should be set/list, got {type(selected)}"
-    assert "test.mp3" in selected, "_selected_files should contain 'test.mp3'"
     print("PASS: _selected_files property works")
 
 

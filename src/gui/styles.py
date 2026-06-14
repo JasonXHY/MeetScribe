@@ -294,7 +294,7 @@ QComboBox::drop-down {{
     subcontrol-position: center right;
 }}
 QComboBox::down-arrow {{
-    image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236B7280'/%3E%3C/svg%3E");
+    image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239CA3AF'/%3E%3C/svg%3E");
     width: 10px;
     height: 6px;
 }}
@@ -361,6 +361,7 @@ QCheckBox::indicator {{
 QCheckBox::indicator:checked {{
     background-color: {C_ACCENT};
     border-color: {C_ACCENT};
+    image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpolyline points='2 6 5 9 10 3' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }}
 QCheckBox::indicator:hover {{
     border-color: {C_ACCENT};

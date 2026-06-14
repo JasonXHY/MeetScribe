@@ -56,10 +56,10 @@ class RecordingBar(QFrame):
 
         # 录音指示点
         self._rec_dot = QLabel()
-        self._rec_dot.setFixedSize(12, 12)
+        self._rec_dot.setFixedSize(10, 10)
         self._rec_dot.setStyleSheet(f"""
             background-color: {C_TXT3};
-            border-radius: 6px;
+            border-radius: 5px;
             border: none;
         """)
         layout.addWidget(self._rec_dot)
@@ -88,18 +88,24 @@ class RecordingBar(QFrame):
             QComboBox {{
                 border: 1px solid {C_BORDER};
                 border-radius: 6px;
-                padding: 2px 8px;
+                padding: 2px 24px 2px 8px;
                 font-family: {FONT_FAMILY};
                 font-size: 11px;
-                background-color: #F0F0F0;
+                background-color: #F9FAFB;
                 color: {C_TXT1};
             }}
             QComboBox:hover {{
-                background-color: #E0E0E0;
+                background-color: #F3F4F6;
             }}
             QComboBox::drop-down {{
                 border: none;
-                width: 20px;
+                width: 24px;
+                subcontrol-position: center right;
+            }}
+            QComboBox::down-arrow {{
+                image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239CA3AF'/%3E%3C/svg%3E");
+                width: 10px;
+                height: 6px;
             }}
             QComboBox QAbstractItemView {{
                 background-color: white;
@@ -226,6 +232,20 @@ class RecordingBar(QFrame):
             """)
             self.pause_btn.setEnabled(True)
             self.pause_btn.setText("暂停")
+            self.pause_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    border: 1px solid {C_ERROR};
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                    font-family: {FONT_FAMILY};
+                    font-size: 12px;
+                    color: {C_ERROR};
+                }}
+                QPushButton:hover {{
+                    background-color: #FDE8E8;
+                }}
+            """)
             self._rec_dot.setStyleSheet(f"""
                 background-color: {C_ERROR};
                 border-radius: 6px;

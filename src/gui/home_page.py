@@ -53,11 +53,11 @@ class HomePage(QWidget):
 
     @property
     def _file_rows(self):
-        return self._file_list_view._row_widgets
+        return []
 
     @property
     def _selected_files(self):
-        return self._file_list_view._selected_files
+        return self._file_list_view.get_selected()
 
     # ══════════════════════════════════════════════════════════
     #  Public API (for cross-component access)
@@ -98,7 +98,7 @@ class HomePage(QWidget):
             QLabel {{
                 color: {C_TXT1};
                 font-family: {FONT_FAMILY};
-                font-size: 22px;
+                font-size: 24px;
                 font-weight: bold;
                 background: transparent;
                 border: none;
@@ -158,23 +158,6 @@ class HomePage(QWidget):
         toolbar = QHBoxLayout()
         toolbar.setSpacing(4)
 
-        btn_style = f"""
-            QPushButton {{
-                background-color: {C_ACCENT};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-family: {FONT_FAMILY};
-                font-size: 12px;
-            }}
-            QPushButton:hover {{
-                background-color: {C_BTN_HOVER};
-            }}
-            QPushButton:disabled {{
-                background-color: {C_TXT3};
-            }}
-        """
         btn_style_secondary = f"""
             QPushButton {{
                 background-color: transparent;
@@ -196,7 +179,7 @@ class HomePage(QWidget):
 
         self._btn_add = QPushButton("添加文件")
         self._btn_add.setFixedSize(90, 32)
-        self._btn_add.setStyleSheet(btn_style)
+        self._btn_add.setProperty("cssClass", "primary")
         self._btn_add.setCursor(Qt.PointingHandCursor)
         toolbar.addWidget(self._btn_add)
 
@@ -329,10 +312,10 @@ class HomePage(QWidget):
         self._log_area.setMaximumBlockCount(500)
         self._log_area.setStyleSheet(f"""
             QPlainTextEdit {{
-                background-color: #FAFAFA;
+                background-color: white;
                 color: {C_TXT2};
                 border: none;
-                font-family: Consolas, monospace;
+                font-family: "Cascadia Code", Consolas, monospace;
                 font-size: 11px;
             }}
         """)

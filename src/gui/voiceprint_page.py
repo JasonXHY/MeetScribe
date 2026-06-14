@@ -91,7 +91,7 @@ class AddVoiceDialog(QDialog):
         subtitle = QLabel("录音朗读以下文本，系统将自动提取声纹")
         subtitle.setStyleSheet(f"""
             QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY};
-                font-size: 11px; background: transparent; border: none; }}
+                font-size: 12px; background: transparent; border: none; }}
         """)
         layout.addWidget(subtitle)
         layout.addSpacing(8)
@@ -116,7 +116,7 @@ class AddVoiceDialog(QDialog):
 
         text_card = QFrame()
         text_card.setStyleSheet(f"""
-            QFrame {{ background-color: {C_BG}; border: 1px solid {C_BORDER};
+            QFrame {{ background-color: {C_CARD}; border: 1px solid {C_BORDER};
                 border-radius: 6px; }}
         """)
         text_card_layout = QVBoxLayout(text_card)
@@ -335,7 +335,7 @@ class VoiceprintPage(QWidget):
         title = QLabel("音色库管理")
         title.setStyleSheet(f"""
             QLabel {{ color: {C_TXT1}; font-family: {FONT_FAMILY};
-                font-size: 22px; font-weight: bold; }}
+                font-size: 24px; font-weight: bold; }}
         """)
         title_frame.addWidget(title)
         title_frame.addStretch()
@@ -415,10 +415,10 @@ class VoiceprintPage(QWidget):
                 border-bottom: 1px solid #F0F0F0;
             }}
             QListWidget::item:selected {{
-                background-color: #D6E4F7; color: {C_TXT1};
+                background-color: {C_ACCENT_LT}; color: {C_TXT1};
             }}
             QListWidget::item:hover {{
-                background-color: #F5F8FF;
+                background-color: #F9FAFB;
             }}
         """)
         self._speaker_list.currentItemChanged.connect(self._on_speaker_select)
@@ -447,7 +447,7 @@ class VoiceprintPage(QWidget):
         self._detail_title = QLabel("请选择一个说话人")
         self._detail_title.setStyleSheet(f"""
             QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY};
-                font-size: 14px; font-weight: bold;
+                font-size: 18px; font-weight: bold;
                 background: transparent; border: none; }}
         """)
         detail_header_layout.addWidget(self._detail_title)
@@ -469,7 +469,7 @@ class VoiceprintPage(QWidget):
         right_layout.addWidget(self._detail_content, 1)
 
         splitter.addWidget(right_panel)
-        splitter.setSizes([250, 400])
+        splitter.setSizes([280, 560])
 
         layout.addWidget(splitter, 1)
 
@@ -511,9 +511,41 @@ class VoiceprintPage(QWidget):
                 return
 
             for name, profile in speakers.items():
-                item = QListWidgetItem(f"{name} ({len(profile.embeddings)} 个样本)")
-                item.setData(Qt.UserRole, name)
-                self._speaker_list.addItem(item)
+                # 创建带彩色头像的自定义widget
+                item_widget = QWidget()
+                item_layout = QHBoxLayout(item_widget)
+                item_layout.setContentsMargins(10, 8, 10, 8)
+                item_layout.setSpacing(10)
+
+                # 彩色圆形头像
+                avatar = QLabel(name[0] if name else "?")
+                avatar.setFixedSize(32, 32)
+                avatar.setAlignment(Qt.AlignCenter)
+                color_idx = hash(name) % len(SPEAKER_COLORS)
+                avatar.setStyleSheet(f"""
+                    background-color: {SPEAKER_COLORS[color_idx]};
+                    color: white; border-radius: 16px;
+                    font-size: 13px; font-weight: bold;
+                """)
+                item_layout.addWidget(avatar)
+
+                # 名字 + 样本数
+                info_layout = QVBoxLayout()
+                info_layout.setSpacing(1)
+                name_lbl = QLabel(name)
+                name_lbl.setStyleSheet(f"color: {C_TXT1}; font-size: 13px; font-weight: 500; background: transparent; border: none;")
+                info_layout.addWidget(name_lbl)
+                meta_lbl = QLabel(f"{len(profile.embeddings)} 个样本")
+                meta_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
+                info_layout.addWidget(meta_lbl)
+                item_layout.addLayout(info_layout)
+                item_layout.addStretch()
+
+                list_item = QListWidgetItem()
+                list_item.setSizeHint(item_widget.sizeHint())
+                list_item.setData(Qt.UserRole, name)
+                self._speaker_list.addItem(list_item)
+                self._speaker_list.setItemWidget(list_item, item_widget)
 
             total_samples = sum(len(p.embeddings) for p in speakers.values())
             self._count_label.setText(f"共 {len(speakers)} 个说话人，{total_samples} 个样本")
@@ -551,7 +583,7 @@ class VoiceprintPage(QWidget):
             self._detail_title.setText(speaker_name)
             self._detail_title.setStyleSheet(f"""
                 QLabel {{ color: {C_TXT1}; font-family: {FONT_FAMILY};
-                    font-size: 14px; font-weight: bold;
+                    font-size: 18px; font-weight: bold;
                     background: transparent; border: none; }}
             """)
 
@@ -732,7 +764,7 @@ class VoiceprintPage(QWidget):
                 self._detail_title.setText("请选择一个说话人")
                 self._detail_title.setStyleSheet(f"""
                     QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY};
-                        font-size: 14px; font-weight: bold;
+                        font-size: 18px; font-weight: bold;
                         background: transparent; border: none; }}
                 """)
 

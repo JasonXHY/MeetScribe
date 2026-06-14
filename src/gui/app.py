@@ -189,13 +189,13 @@ class MeetScribeApp(QMainWindow):
             sb_layout.setContentsMargins(8, 0, 8, 0)
 
             self._status_lbl = QLabel("就绪")
-            self._status_lbl.setStyleSheet(f"color: #757575; font-size: 11px; border: none; background: transparent;")
+            self._status_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; border: none; background: transparent;")
             sb_layout.addWidget(self._status_lbl)
 
             sb_layout.addStretch()
 
             engine_lbl = QLabel("SenseVoice + CAM++ + ct-punc")
-            engine_lbl.setStyleSheet(f"color: #757575; font-size: 11px; border: none; background: transparent;")
+            engine_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; border: none; background: transparent;")
             sb_layout.addWidget(engine_lbl)
 
             main_layout.addWidget(status_frame)
@@ -304,8 +304,11 @@ class MeetScribeApp(QMainWindow):
         self._append_log(msg)
 
     def _append_log(self, msg):
-        """线程安全的日志追加"""
+        """线程安全的日志追加（仅显示用户关心的内容）"""
         try:
+            from gui.home_page import USER_FRIENDLY_KEYWORDS
+            if not any(kw in msg for kw in USER_FRIENDLY_KEYWORDS):
+                return
             log_area = self._home_page.get_log_area() if self._home_page else None
             if log_area:
                 log_area.appendPlainText(msg)

@@ -14,8 +14,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QPushButton, QLabel, QFrame
 )
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont, QIcon
+from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter
 
 from gui.icons import (
     create_icon, icon_play, icon_preview, icon_open_folder,
@@ -98,6 +98,7 @@ class FileListView(QWidget):
         self._table.setShowGrid(False)
         self._table.verticalHeader().setVisible(False)
         self._table.verticalHeader().setDefaultSectionSize(38)  # 行高
+        self._table.verticalHeader().setMinimumSectionSize(38)
 
         # 样式
         self._table.setStyleSheet("""
@@ -185,15 +186,29 @@ class FileListView(QWidget):
             queue_item.setText("")
         self._table.setItem(row, 0, queue_item)
 
-        # 文件名
-        name_item = QTableWidgetItem(file_info.get("name", ""))
+        # 文件名（带蓝色圆点）
+        name = file_info.get("name", "")
+        name_item = QTableWidgetItem(name)
         name_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         name_item.setToolTip(file_info.get("path", ""))
+        name_item.setForeground(QColor("#111827"))
+        # 蓝色圆点图标
+        dot_pixmap = QPixmap(6, 6)
+        dot_pixmap.fill(Qt.transparent)
+        painter = QPainter(dot_pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QColor("#3B82F6"))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(0, 0, 6, 6)
+        painter.end()
+        name_item.setIcon(QIcon(dot_pixmap))
+        name_item.setIconSize(QSize(6, 6))
         self._table.setItem(row, 1, name_item)
 
         # 主题
         topic_item = QTableWidgetItem(file_info.get("topic", ""))
         topic_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        topic_item.setForeground(QColor("#9CA3AF"))
         self._table.setItem(row, 2, topic_item)
 
         # 时长

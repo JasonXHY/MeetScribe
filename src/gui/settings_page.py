@@ -17,7 +17,7 @@ from gui.styles import (
     C_TXT1, C_TXT2, C_TXT3, C_WARN, FONT_FAMILY, MODEL_CACHE_DIR,
     APP_VERSION, APP_NAME, APP_NAME_EN,
 )
-from gui.icons import icon_api_key_visible, icon_api_key_hidden, IconColors
+from gui.icons import icon_api_key_visible, icon_api_key_hidden, IconColors, icon_status_done, icon_status_failed
 
 logger = logging.getLogger("MeetScribe")
 
@@ -71,7 +71,7 @@ class SettingsPage(QWidget):
             QLabel {{
                 color: {C_TXT1};
                 font-family: {FONT_FAMILY};
-                font-size: 22px;
+                font-size: 24px;
                 font-weight: bold;
                 background: transparent;
                 border: none;
@@ -191,15 +191,20 @@ class SettingsPage(QWidget):
         api_key = self._config.get("mimo_api_key", "") if self._config else ""
         self._api_key_entry.setText(api_key)
         self._api_key_toggle = QPushButton()
-        self._api_key_toggle.setFixedSize(30, 30)
+        self._api_key_toggle.setFixedSize(32, 32)
         self._api_key_toggle.setIcon(icon_api_key_visible())
         self._api_key_toggle.setIconSize(QSize(16, 16))
         self._api_key_toggle.setStyleSheet(f"""
             QPushButton {{
-                background-color: transparent; border: none;
-                border-radius: 4px;
+                background-color: #F9FAFB;
+                border: 1px solid {C_BORDER};
+                border-radius: 6px;
+                padding: 6px;
             }}
-            QPushButton:hover {{ background-color: #F3F4F6; }}
+            QPushButton:hover {{
+                background-color: #F3F4F6;
+                border-color: #D1D5DB;
+            }}
         """)
         self._api_key_toggle.setCursor(Qt.PointingHandCursor)
         self._api_key_toggle.clicked.connect(self._toggle_api_key)
@@ -214,7 +219,7 @@ class SettingsPage(QWidget):
         self._form_row(group, "API Key", api_key_container)
 
         self._access_mode_combo = QComboBox()
-        self._access_mode_combo.addItems(["Token Plan", "按量计费"])
+        self._access_mode_combo.addItems(["按量计费", "Token Plan"])
         self._access_mode_combo.setFixedWidth(180)
         self._form_row(group, "接入模式", self._access_mode_combo,
                        hint_text="Token Plan = 包月套餐 | 按量计费 = 按用量付费")
@@ -225,7 +230,7 @@ class SettingsPage(QWidget):
         self._form_row(group, "本地 LLM", self._ollama_combo)
 
         self._auto_summary_combo = QComboBox()
-        self._auto_summary_combo.addItems(["关闭", "转写后自动生成", "手动触发"])
+        self._auto_summary_combo.addItems(["转写后自动生成", "关闭", "手动触发"])
         self._auto_summary_combo.setFixedWidth(180)
         self._form_row(group, "自动摘要", self._auto_summary_combo)
 
@@ -379,7 +384,7 @@ class SettingsPage(QWidget):
         lbl.setStyleSheet(f"""
             color: {C_TXT2};
             font-family: {FONT_FAMILY};
-            font-size: 12px;
+            font-size: 13px;
             background: transparent;
             border: none;
         """)
@@ -464,15 +469,16 @@ class SettingsPage(QWidget):
             row.setSpacing(4)
 
             if state["cached"]:
-                icon = "\u2705"
+                icon = icon_status_done()
                 color = C_SUCCESS
             else:
-                icon = "\u274c"
+                icon = icon_status_failed() if state["info"]["required"] else icon_status_done()
                 color = C_ERROR if state["info"]["required"] else C_WARN
 
-            icon_lbl = QLabel(icon)
+            icon_lbl = QLabel()
             icon_lbl.setFixedWidth(24)
-            icon_lbl.setStyleSheet("background: transparent; border: none; font-size: 12px;")
+            icon_lbl.setPixmap(icon.pixmap(16, 16))
+            icon_lbl.setStyleSheet("background: transparent; border: none;")
             row.addWidget(icon_lbl)
 
             name_lbl = QLabel(model_id)
@@ -499,6 +505,13 @@ class SettingsPage(QWidget):
             container.setLayout(row)
             container.setStyleSheet("background: transparent; border: none;")
             self._model_status_layout.addWidget(container)
+
+            # 分隔线（非最后一行）
+            if model_id != list(status.keys())[-1]:
+                sep = QFrame()
+                sep.setFixedHeight(1)
+                sep.setStyleSheet(f"background-color: #F3F4F6; border: none;")
+                self._model_status_layout.addWidget(sep)
 
         missing = self._model_manager.get_missing_models(required_only=True)
         if missing:
