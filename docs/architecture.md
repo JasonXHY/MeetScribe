@@ -527,8 +527,8 @@ C:\侧耳倾听\
 
 ```json
 {
-  "recording_dir": "C:\\MeetScribe\\recordings",
-  "transcript_dir": "C:\\MeetScribe\\transcripts",
+  "recording_dir": "./recordings",
+  "transcript_dir": "./transcripts",
   "output_format": "md",
   "recording_mode": "dual",
   "auto_correction": "转写后自动纠错",
