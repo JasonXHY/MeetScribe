@@ -3,6 +3,9 @@
 """
 MeetScribe 模型注册表
 支持多家国内大模型厂商的 API 端点管理
+
+更新日期：2026-06-15
+数据来源：docs/model-registry-update.md（基于各厂商官方公开信息整理）
 """
 
 import logging
@@ -12,198 +15,149 @@ logger = logging.getLogger("MeetScribe")
 # ── 厂商排序 ──────────────────────────────────────────────
 
 _VENDOR_ORDER = [
-    "小米", "智谱", "阿里", "腾讯", "百度",
-    "DeepSeek", "月之暗面", "零一万物", "讯飞", "百川", "MiniMax",
+    "小米 MiMo", "智谱 AI", "阿里巴巴", "DeepSeek", "腾讯混元",
+    "百度文心", "月之暗面 Kimi", "讯飞星火", "百川智能", "MiniMax",
 ]
 
 # ── 模型注册表 ────────────────────────────────────────────
-# 每个厂商包含：
-#   models: dict[model_name, {token_plan: url, paygo: url}]
-#   is_same_url: bool — Token Plan 和按量计费使用相同端点
+# 每个模型包含 token_plan 和 paygo 两种 URL（不同接入模式对应不同端点）
 
 MODEL_REGISTRY = {
-    "小米": {
+    "小米 MiMo": {
         "models": {
             "mimo-v2.5-pro": {
-                "token_plan": "https://api.xiaomimimo.com/v1",
+                "token_plan": "https://token-plan-cn.xiaomimimo.com/v1",
                 "paygo": "https://api.xiaomimimo.com/v1",
             },
             "mimo-v2.5": {
-                "token_plan": "https://api.xiaomimimo.com/v1",
-                "paygo": "https://api.xiaomimimo.com/v1",
-            },
-            "mimo-v2-flash": {
-                "token_plan": "https://api.xiaomimimo.com/v1",
+                "token_plan": "https://token-plan-cn.xiaomimimo.com/v1",
                 "paygo": "https://api.xiaomimimo.com/v1",
             },
         },
-        "is_same_url": True,
     },
-    "智谱": {
+    "智谱 AI": {
         "models": {
-            "glm-4-plus": {
-                "token_plan": "https://open.bigmodel.cn/api/paas/v4",
+            "glm-4.7-flash": {
+                "token_plan": "https://open.bigmodel.cn/api/coding/paas/v4",
                 "paygo": "https://open.bigmodel.cn/api/paas/v4",
             },
-            "glm-4-flash": {
-                "token_plan": "https://open.bigmodel.cn/api/paas/v4",
+            "glm-5-turbo": {
+                "token_plan": "https://open.bigmodel.cn/api/coding/paas/v4",
                 "paygo": "https://open.bigmodel.cn/api/paas/v4",
             },
-            "glm-4-air": {
-                "token_plan": "https://open.bigmodel.cn/api/paas/v4",
+            "glm-5": {
+                "token_plan": "https://open.bigmodel.cn/api/coding/paas/v4",
                 "paygo": "https://open.bigmodel.cn/api/paas/v4",
             },
         },
-        "is_same_url": True,
     },
-    "阿里": {
+    "阿里巴巴": {
         "models": {
-            "qwen-max": {
-                "token_plan": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "qwen3.7-max": {
+                "token_plan": "https://token-plan.cn-beijing.maas.aliuncs.com/v1",
                 "paygo": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             },
-            "qwen-plus": {
-                "token_plan": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "qwen3.7-plus": {
+                "token_plan": "https://token-plan.cn-beijing.maas.aliuncs.com/v1",
                 "paygo": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             },
-            "qwen-turbo": {
-                "token_plan": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "qwen3.5-plus": {
+                "token_plan": "https://token-plan.cn-beijing.maas.aliuncs.com/v1",
+                "paygo": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            },
+            "qwen3.5-flash": {
+                "token_plan": "https://token-plan.cn-beijing.maas.aliuncs.com/v1",
                 "paygo": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             },
         },
-        "is_same_url": True,
-    },
-    "腾讯": {
-        "models": {
-            "hunyuan-pro": {
-                "token_plan": "https://api.lkeap.cloud.tencent.com/v1",
-                "paygo": "https://api.lkeap.cloud.tencent.com/v1",
-            },
-            "hunyuan-standard": {
-                "token_plan": "https://api.lkeap.cloud.tencent.com/v1",
-                "paygo": "https://api.lkeap.cloud.tencent.com/v1",
-            },
-            "hunyuan-lite": {
-                "token_plan": "https://api.lkeap.cloud.tencent.com/v1",
-                "paygo": "https://api.lkeap.cloud.tencent.com/v1",
-            },
-        },
-        "is_same_url": True,
-    },
-    "百度": {
-        "models": {
-            "ernie-4.0-turbo-8k": {
-                "token_plan": "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop",
-                "paygo": "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop",
-            },
-            "ernie-3.5-8k": {
-                "token_plan": "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop",
-                "paygo": "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop",
-            },
-            "ernie-speed-8k": {
-                "token_plan": "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop",
-                "paygo": "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop",
-            },
-        },
-        "is_same_url": True,
     },
     "DeepSeek": {
         "models": {
-            "deepseek-chat": {
+            "deepseek-v4-pro": {
                 "token_plan": "https://api.deepseek.com/v1",
                 "paygo": "https://api.deepseek.com/v1",
             },
-            "deepseek-reasoner": {
+            "deepseek-v4-flash": {
                 "token_plan": "https://api.deepseek.com/v1",
                 "paygo": "https://api.deepseek.com/v1",
             },
         },
-        "is_same_url": True,
     },
-    "月之暗面": {
+    "腾讯混元": {
         "models": {
-            "moonshot-v1-8k": {
-                "token_plan": "https://api.moonshot.cn/v1",
+            "hunyuan-turbos": {
+                "token_plan": "https://api.lkeap.cloud.tencent.com/plan/v1",
+                "paygo": "https://api.hunyuan.cloud.tencent.com/v1",
+            },
+            "hunyuan-t1": {
+                "token_plan": "https://api.lkeap.cloud.tencent.com/plan/v1",
+                "paygo": "https://api.hunyuan.cloud.tencent.com/v1",
+            },
+        },
+    },
+    "百度文心": {
+        "models": {
+            "ernie-5.0": {
+                "token_plan": "https://qianfan.baidubce.com/v2",
+                "paygo": "https://qianfan.baidubce.com/v2",
+            },
+            "ernie-4.5-turbo-128k-preview": {
+                "token_plan": "https://qianfan.baidubce.com/v2",
+                "paygo": "https://qianfan.baidubce.com/v2",
+            },
+            "ernie-x1.1": {
+                "token_plan": "https://qianfan.baidubce.com/v2",
+                "paygo": "https://qianfan.baidubce.com/v2",
+            },
+        },
+    },
+    "月之暗面 Kimi": {
+        "models": {
+            "kimi-k2.6": {
+                "token_plan": "https://api.kimi.com/coding/v1",
                 "paygo": "https://api.moonshot.cn/v1",
             },
-            "moonshot-v1-32k": {
-                "token_plan": "https://api.moonshot.cn/v1",
-                "paygo": "https://api.moonshot.cn/v1",
-            },
-            "moonshot-v1-128k": {
-                "token_plan": "https://api.moonshot.cn/v1",
+            "kimi-k2.7-code": {
+                "token_plan": "https://api.kimi.com/coding/v1",
                 "paygo": "https://api.moonshot.cn/v1",
             },
         },
-        "is_same_url": True,
     },
-    "零一万物": {
+    "讯飞星火": {
         "models": {
-            "yi-large": {
-                "token_plan": "https://api.lingyiwanwu.com/v1",
-                "paygo": "https://api.lingyiwanwu.com/v1",
-            },
-            "yi-medium": {
-                "token_plan": "https://api.lingyiwanwu.com/v1",
-                "paygo": "https://api.lingyiwanwu.com/v1",
-            },
-            "yi-lightning": {
-                "token_plan": "https://api.lingyiwanwu.com/v1",
-                "paygo": "https://api.lingyiwanwu.com/v1",
-            },
-        },
-        "is_same_url": True,
-    },
-    "讯飞": {
-        "models": {
-            "generalv3.5": {
-                "token_plan": "https://spark-api-open.xf-yun.com/v1",
+            "spark-lite": {
+                "token_plan": "https://maas-token-api.cn-huabei-1.xf-yun.com/v2",
                 "paygo": "https://spark-api-open.xf-yun.com/v1",
             },
-            "generalv3": {
-                "token_plan": "https://spark-api-open.xf-yun.com/v1",
-                "paygo": "https://spark-api-open.xf-yun.com/v1",
-            },
-            "4.0Ultra": {
-                "token_plan": "https://spark-api-open.xf-yun.com/v1",
+            "spark-max": {
+                "token_plan": "https://maas-token-api.cn-huabei-1.xf-yun.com/v2",
                 "paygo": "https://spark-api-open.xf-yun.com/v1",
             },
         },
-        "is_same_url": True,
     },
-    "百川": {
+    "百川智能": {
         "models": {
-            "Baichuan4": {
+            "Baichuan-M3-Plus": {
                 "token_plan": "https://api.baichuan-ai.com/v1",
                 "paygo": "https://api.baichuan-ai.com/v1",
             },
-            "Baichuan3-Turbo": {
-                "token_plan": "https://api.baichuan-ai.com/v1",
-                "paygo": "https://api.baichuan-ai.com/v1",
-            },
-            "Baichuan2-Turbo": {
+            "Baichuan-M3": {
                 "token_plan": "https://api.baichuan-ai.com/v1",
                 "paygo": "https://api.baichuan-ai.com/v1",
             },
         },
-        "is_same_url": True,
     },
     "MiniMax": {
         "models": {
-            "MiniMax-Text-01": {
-                "token_plan": "https://api.minimax.chat/v1",
-                "paygo": "https://api.minimax.chat/v1",
+            "MiniMax-M3": {
+                "token_plan": "https://api.minimax.chat/v1/text/chatcompletion_v2",
+                "paygo": "https://api.minimax.chat/v1/text/chatcompletion_v2",
             },
-            "abab6.5s-chat": {
-                "token_plan": "https://api.minimax.chat/v1",
-                "paygo": "https://api.minimax.chat/v1",
-            },
-            "abab5.5-chat": {
-                "token_plan": "https://api.minimax.chat/v1",
-                "paygo": "https://api.minimax.chat/v1",
+            "abab7-chat": {
+                "token_plan": "https://api.minimax.chat/v1/text/chatcompletion_v2",
+                "paygo": "https://api.minimax.chat/v1/text/chatcompletion_v2",
             },
         },
-        "is_same_url": True,
     },
 }
 
@@ -252,7 +206,9 @@ def get_base_url(vendor: str, model: str, access_mode: str = "token_plan") -> st
     # Map Chinese display names / display names to registry keys
     mode_map = {
         "Token Plan": "token_plan",
+        "token_plan": "token_plan",
         "按量计费": "paygo",
+        "paygo": "paygo",
     }
     key = mode_map.get(access_mode, "token_plan")
 
@@ -270,12 +226,10 @@ def is_free_model(model_name: str) -> bool:
     免费模型包含 "free" 关键字，或属于以下已知免费模型列表。
     """
     free_models = {
-        "mimo-v2-flash",
-        "glm-4-flash",
-        "qwen-turbo",
-        "ernie-speed-8k",
-        "deepseek-chat",
-        "yi-lightning",
+        "glm-4.7-flash",       # 智谱：永久免费
+        "glm-5-turbo",         # 智谱：限时免费
+        "spark-lite",          # 讯飞：永久免费
+        "Baichuan-M3-Plus",   # 百川：医疗领域免费
     }
     if model_name in free_models:
         return True

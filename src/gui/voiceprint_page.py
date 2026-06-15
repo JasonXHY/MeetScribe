@@ -61,7 +61,7 @@ class AddVoiceDialog(QDialog):
     def __init__(self, parent=None, on_save=None):
         super().__init__(parent)
         self.setWindowTitle("添加新说话人")
-        self.setFixedSize(440, 360)
+        self.setFixedSize(440, 380)
         self.setStyleSheet(f"QDialog {{ background-color: {C_BG}; }}")
 
         self._parent = parent
@@ -76,9 +76,10 @@ class AddVoiceDialog(QDialog):
 
     def _build(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(24, 12, 24, 12)
+        layout.setSpacing(6)
 
+        # 标题
         title = QLabel("添加新说话人")
         title.setStyleSheet(f"""
             QLabel {{ color: {C_TXT1}; font-family: {FONT_FAMILY};
@@ -93,8 +94,9 @@ class AddVoiceDialog(QDialog):
                 font-size: 12px; background: transparent; border: none; }}
         """)
         layout.addWidget(subtitle)
-        layout.addSpacing(8)
+        layout.addSpacing(4)
 
+        # 姓名输入
         name_label = QLabel("说话人姓名")
         name_label.setStyleSheet(f"""
             QLabel {{ color: {C_TXT2}; font-family: {FONT_FAMILY};
@@ -111,44 +113,44 @@ class AddVoiceDialog(QDialog):
                 color: {C_TXT1}; background: white; }}
         """)
         layout.addWidget(self._name_entry)
-        layout.addSpacing(4)
+        layout.addSpacing(2)
 
-        text_card = QFrame()
-        text_card.setStyleSheet(f"""
-            QFrame {{ background-color: {C_CARD}; border: 1px solid {C_BORDER};
-                border-radius: 6px; }}
-        """)
-        text_card_layout = QVBoxLayout(text_card)
-        text_card_layout.setContentsMargins(12, 8, 12, 8)
-        text_card_layout.setSpacing(4)
-
+        # 朗读文本区域（无边框，占剩余空间）
         read_label = QLabel("请朗读以下文本：")
         read_label.setStyleSheet(f"""
             QLabel {{ color: {C_TXT2}; font-family: {FONT_FAMILY};
-                font-size: 11px; font-weight: bold; }}
+                font-size: 12px; font-weight: 600;
+                background: transparent; border: none; }}
         """)
-        text_card_layout.addWidget(read_label)
+        layout.addWidget(read_label)
 
-        preset_label = QLabel(f"\u2022 {self.PRESET_TEXT}")
-        preset_label.setStyleSheet(f"""
-            QLabel {{ color: {C_TXT1}; font-family: {FONT_FAMILY}; font-size: 11px; }}
+        self._preset_label = QLabel(f"\u2022 {self.PRESET_TEXT}")
+        self._preset_label.setStyleSheet(f"""
+            QLabel {{ color: {C_TXT1}; font-family: {FONT_FAMILY}; font-size: 12px;
+                background: transparent; border: none; }}
         """)
-        preset_label.setWordWrap(True)
-        text_card_layout.addWidget(preset_label)
+        self._preset_label.setWordWrap(True)
+        layout.addWidget(self._preset_label, 1)
 
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setFixedHeight(1)
-        separator.setStyleSheet(f"QFrame {{ background-color: {C_BORDER}; }}")
-        text_card_layout.addWidget(separator)
+        # 录音状态
+        rec_state_row = QHBoxLayout()
+        rec_state_row.setSpacing(6)
+        self._rec_dot = QLabel()
+        self._rec_dot.setFixedSize(8, 8)
+        self._rec_dot.setStyleSheet(f"""
+            QLabel {{ background-color: {C_TXT3}; border-radius: 4px; border: none;
+                min-width: 8px; min-height: 8px; }}
+        """)
+        rec_state_row.addWidget(self._rec_dot)
 
         self._status_label = QLabel("准备就绪")
         self._status_label.setStyleSheet(f"""
-            QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY}; font-size: 11px; }}
+            QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY}; font-size: 11px;
+                background: transparent; border: none; }}
         """)
-        text_card_layout.addWidget(self._status_label)
-
-        layout.addWidget(text_card)
+        rec_state_row.addWidget(self._status_label)
+        rec_state_row.addStretch()
+        layout.addLayout(rec_state_row)
 
         btn_layout = QHBoxLayout()
 
@@ -162,7 +164,7 @@ class AddVoiceDialog(QDialog):
         self._save_btn = QPushButton("保存")
         self._save_btn.setFixedSize(80, 36)
         self._save_btn.setEnabled(False)
-        self._save_btn.setProperty("cssClass", "success")
+        self._save_btn.setProperty("cssClass", "primary")
         self._save_btn.setCursor(Qt.PointingHandCursor)
         self._save_btn.clicked.connect(self._save)
         btn_layout.addWidget(self._save_btn)
@@ -201,9 +203,13 @@ class AddVoiceDialog(QDialog):
             self._recording = True
 
             self._record_btn.setText("停止录音")
+            self._rec_dot.setStyleSheet(f"""
+                QLabel {{ background-color: {C_ERROR}; border-radius: 4px; border: none; }}
+            """)
             self._status_label.setText("录音中... 请朗读上述文本")
             self._status_label.setStyleSheet(f"""
-                QLabel {{ color: {C_ERROR}; font-family: {FONT_FAMILY}; font-size: 11px; }}
+                QLabel {{ color: {C_ERROR}; font-family: {FONT_FAMILY}; font-size: 11px;
+                    background: transparent; border: none; }}
             """)
             logger.debug("[ADD-VOICE] Recording started")
 
@@ -223,9 +229,13 @@ class AddVoiceDialog(QDialog):
 
             self._record_btn.setText("开始录音")
             self._record_btn.setEnabled(False)
+            self._rec_dot.setStyleSheet(f"""
+                QLabel {{ background-color: {C_TXT3}; border-radius: 4px; border: none; }}
+            """)
             self._status_label.setText("正在提取声纹...")
             self._status_label.setStyleSheet(f"""
-                QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY}; font-size: 11px; }}
+                QLabel {{ color: {C_TXT3}; font-family: {FONT_FAMILY}; font-size: 11px;
+                    background: transparent; border: none; }}
             """)
 
     def _on_recording_complete(self, saved_files):
@@ -254,6 +264,9 @@ class AddVoiceDialog(QDialog):
         if embedding is not None:
             self._temp_embedding = embedding
             self._temp_audio_path = audio_path
+            self._rec_dot.setStyleSheet(f"""
+                QLabel {{ background-color: {C_SUCCESS}; border-radius: 4px; border: none; }}
+            """)
             self._status_label.setText("声纹提取成功，请填写信息后保存")
             self._status_label.setStyleSheet(
                 f"QLabel {{ color: {C_SUCCESS}; font-family: {FONT_FAMILY}; font-size: 11px; }}")
@@ -326,7 +339,7 @@ class VoiceprintPage(QWidget):
 
     def _build(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 12)
+        layout.setContentsMargins(24, 16, 24, 12)
         layout.setSpacing(8)
 
         # 标题
@@ -349,8 +362,15 @@ class VoiceprintPage(QWidget):
 
         # 主体区域（左右分栏）
         splitter = QSplitter(Qt.Horizontal)
+        splitter.setHandleWidth(12)
         splitter.setStyleSheet(f"""
-            QSplitter::handle {{ background-color: {C_BORDER}; width: 1px; }}
+            QSplitter::handle {{
+                background-color: {C_BG};
+                width: 12px;
+            }}
+            QSplitter::handle:hover {{
+                background-color: #F3F4F6;
+            }}
         """)
 
         # 左侧：说话人列表
@@ -369,7 +389,7 @@ class VoiceprintPage(QWidget):
                 border-bottom: 1px solid {C_BORDER}; }}
         """)
         left_header_layout = QHBoxLayout(left_header)
-        left_header_layout.setContentsMargins(12, 10, 12, 10)
+        left_header_layout.setContentsMargins(14, 12, 14, 12)
 
         list_title = QLabel("说话人列表")
         list_title.setStyleSheet(f"""
@@ -389,7 +409,7 @@ class VoiceprintPage(QWidget):
 
         # 搜索框
         search_row = QHBoxLayout()
-        search_row.setContentsMargins(12, 6, 12, 6)
+        search_row.setContentsMargins(14, 4, 14, 4)
         self._search_entry = QLineEdit()
         self._search_entry.setPlaceholderText("搜索说话人...")
         self._search_entry.setFixedHeight(28)
@@ -411,7 +431,9 @@ class VoiceprintPage(QWidget):
             }}
             QListWidget::item {{
                 padding: 10px 12px;
-                border-bottom: 1px solid #F0F0F0;
+                border-radius: 6px;
+                margin: 0 4px 2px 4px;
+                border: none;
             }}
             QListWidget::item:selected {{
                 background-color: {C_ACCENT_LT}; color: {C_TXT1};
@@ -441,7 +463,7 @@ class VoiceprintPage(QWidget):
                 border-bottom: 1px solid {C_BORDER}; }}
         """)
         detail_header_layout = QHBoxLayout(self._detail_header)
-        detail_header_layout.setContentsMargins(16, 12, 16, 12)
+        detail_header_layout.setContentsMargins(20, 16, 20, 16)
 
         self._detail_title = QLabel("请选择一个说话人")
         self._detail_title.setStyleSheet(f"""
@@ -460,7 +482,7 @@ class VoiceprintPage(QWidget):
         self._detail_widget = QWidget()
         self._detail_widget.setStyleSheet("background: transparent;")
         self._detail_layout = QVBoxLayout(self._detail_widget)
-        self._detail_layout.setContentsMargins(16, 12, 16, 12)
+        self._detail_layout.setContentsMargins(20, 16, 20, 16)
         self._detail_layout.setSpacing(12)
         self._detail_layout.addStretch()
 
@@ -474,7 +496,7 @@ class VoiceprintPage(QWidget):
 
         # 底部信息
         info_layout = QHBoxLayout()
-        info_layout.setContentsMargins(4, 8, 4, 0)
+        info_layout.setContentsMargins(4, 4, 4, 0)
 
         info_label = QLabel("音色库用于识别已注册的说话人，转写时自动匹配")
         info_label.setStyleSheet(f"""
@@ -608,12 +630,7 @@ class VoiceprintPage(QWidget):
 
             delete_btn = QPushButton("删除")
             delete_btn.setFixedSize(60, 28)
-            delete_btn.setStyleSheet(f"""
-                QPushButton {{ background-color: transparent; color: {C_ERROR};
-                    border: 1px solid #FCA5A5; border-radius: 4px;
-                    font-size: 12px; }}
-                QPushButton:hover {{ background-color: #FEF2F2; }}
-            """)
+            delete_btn.setProperty("cssClass", "danger-outline")
             delete_btn.setCursor(Qt.PointingHandCursor)
             delete_btn.clicked.connect(lambda: self._delete_speaker(speaker_name))
             btn_layout.addWidget(delete_btn)
@@ -634,7 +651,7 @@ class VoiceprintPage(QWidget):
 
             info_card = QFrame()
             info_card.setStyleSheet(f"""
-                QFrame {{ background-color: {C_BG}; border: none; border-radius: 6px; }}
+                QFrame {{ background-color: #F9FAFB; border: none; border-radius: 6px; }}
             """)
             info_card_layout = QVBoxLayout(info_card)
             info_card_layout.setContentsMargins(12, 8, 12, 8)
@@ -673,7 +690,7 @@ class VoiceprintPage(QWidget):
 
             samples_card = QFrame()
             samples_card.setStyleSheet(f"""
-                QFrame {{ background-color: {C_BG}; border: none; border-radius: 6px; }}
+                QFrame {{ background-color: #F9FAFB; border: none; border-radius: 6px; }}
             """)
             samples_layout = QVBoxLayout(samples_card)
             samples_layout.setContentsMargins(12, 8, 12, 8)

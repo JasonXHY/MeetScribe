@@ -61,20 +61,13 @@ class TopBar(QFrame):
             QLabel {{
                 color: {C_ACCENT};
                 font-family: {FONT_FAMILY};
-                font-size: 16px;
+                font-size: 15px;
                 font-weight: bold;
                 background: transparent;
                 border: none;
             }}
         """)
         layout.addWidget(name_label)
-
-        # Separator
-        sep = QLabel()
-        sep.setFixedWidth(1)
-        sep.setFixedHeight(20)
-        sep.setStyleSheet(f"background-color: {C_BORDER}; border: none;")
-        layout.addWidget(sep)
         layout.addSpacing(12)
 
         # Navigation buttons

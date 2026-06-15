@@ -84,7 +84,7 @@ class HomePage(QWidget):
 
     def _build(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 8)
+        layout.setContentsMargins(24, 16, 24, 12)
         layout.setSpacing(6)
 
         # ── Title ──
@@ -127,7 +127,7 @@ class HomePage(QWidget):
             }}
         """)
         rec_layout = QVBoxLayout(rec_card)
-        rec_layout.setContentsMargins(14, 8, 14, 8)
+        rec_layout.setContentsMargins(16, 10, 16, 10)
 
         initial_mode = "dual"
         if self._app and hasattr(self._app, 'config'):
@@ -147,12 +147,12 @@ class HomePage(QWidget):
             }}
         """)
         file_layout = QVBoxLayout(file_card)
-        file_layout.setContentsMargins(14, 10, 14, 10)
+        file_layout.setContentsMargins(16, 12, 16, 12)
         file_layout.setSpacing(6)
 
         # Toolbar
         toolbar = QHBoxLayout()
-        toolbar.setSpacing(4)
+        toolbar.setSpacing(8)
 
         btn_style_secondary = f"""
             QPushButton {{
@@ -174,35 +174,34 @@ class HomePage(QWidget):
         """
 
         self._btn_add = QPushButton("添加文件")
-        self._btn_add.setFixedSize(90, 32)
+        self._btn_add.setFixedSize(104, 32)
         self._btn_add.setProperty("cssClass", "primary")
         self._btn_add.setCursor(Qt.PointingHandCursor)
         toolbar.addWidget(self._btn_add)
 
         self._btn_transcribe = QPushButton("开始转写")
-        self._btn_transcribe.setFixedSize(90, 32)
+        self._btn_transcribe.setFixedSize(104, 32)
         self._btn_transcribe.setProperty("cssClass", "success")
         self._btn_transcribe.setCursor(Qt.PointingHandCursor)
         toolbar.addWidget(self._btn_transcribe)
 
         self._btn_ai_summary = QPushButton("AI 摘要")
-        self._btn_ai_summary.setFixedSize(84, 32)
+        self._btn_ai_summary.setFixedSize(96, 32)
         self._btn_ai_summary.setProperty("cssClass", "purple")
         self._btn_ai_summary.setCursor(Qt.PointingHandCursor)
         toolbar.addWidget(self._btn_ai_summary)
 
+        # 分隔线（AI 摘要和合并转写之间）
+        sep = QFrame()
+        sep.setFixedSize(1, 20)
+        sep.setStyleSheet(f"background-color: {C_BORDER}; border: none;")
+        toolbar.addWidget(sep)
+
         self._btn_merge = QPushButton("合并转写")
-        self._btn_merge.setFixedSize(90, 32)
+        self._btn_merge.setFixedSize(104, 32)
         self._btn_merge.setStyleSheet(btn_style_secondary)
         self._btn_merge.setCursor(Qt.PointingHandCursor)
         toolbar.addWidget(self._btn_merge)
-
-        # 分隔线
-        sep = QLabel()
-        sep.setFixedWidth(1)
-        sep.setFixedHeight(24)
-        sep.setStyleSheet(f"background-color: {C_BORDER}; border: none;")
-        toolbar.addWidget(sep)
 
         self._btn_delete = QPushButton("删除选中")
         self._btn_delete.setFixedSize(80, 32)
@@ -265,7 +264,7 @@ class HomePage(QWidget):
             }}
         """)
         log_layout = QVBoxLayout(log_card)
-        log_layout.setContentsMargins(14, 8, 14, 8)
+        log_layout.setContentsMargins(16, 8, 16, 8)
         log_layout.setSpacing(4)
 
         # 日志标题 + 清除按钮
@@ -301,6 +300,12 @@ class HomePage(QWidget):
         log_hdr.addWidget(clear_btn)
         log_hdr.addStretch()
         log_layout.addLayout(log_hdr)
+
+        # 日志标题和内容之间的分隔线
+        log_sep = QFrame()
+        log_sep.setFixedHeight(1)
+        log_sep.setStyleSheet(f"background-color: #F3F4F6; border: none;")
+        log_layout.addWidget(log_sep)
 
         from PySide6.QtWidgets import QPlainTextEdit
         self._log_area = QPlainTextEdit()

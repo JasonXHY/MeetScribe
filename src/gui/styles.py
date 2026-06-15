@@ -37,9 +37,9 @@ APP_NAME_EN  = "MeetScribe"
 FONT_FAMILY  = "Microsoft YaHei, Segoe UI, sans-serif"
 FONT_MONO    = "Cascadia Code, Consolas, monospace"
 TOPBAR_H     = 44
-ASSETS_DIR   = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
-ICON_PNG     = os.path.join(ASSETS_DIR, "icon.png")
-ICON_ICO     = os.path.join(ASSETS_DIR, "icon.ico")
+ASSETS_DIR   = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets")
+ICON_PNG     = os.path.join(ASSETS_DIR, "logo_256x256.png")
+ICON_ICO     = os.path.join(ASSETS_DIR, "logo.ico")
 
 # ── Font Sizes ───────────────────────────────────────────────
 FONT_SIZE_DISPLAY = 24      # Display - 页面标题
@@ -149,9 +149,10 @@ QPushButton {{
     background-color: transparent;
     border: 1px solid {C_BORDER};
     border-radius: 6px;
-    padding: 6px 12px;
+    padding: 0 16px;
     font-family: {FONT_FAMILY};
     font-size: 13px;
+    font-weight: 500;
     color: {C_TXT2};
     min-height: 20px;
 }}
@@ -226,6 +227,29 @@ QPushButton[cssClass="purple"]:hover {{
 }}
 QPushButton[cssClass="purple"]:pressed {{
     background-color: #6D28D9;
+}}
+
+/* Save Button */
+QPushButton[cssClass="save"] {{
+    background-color: {C_ACCENT};
+    color: white;
+    border: none;
+    font-weight: 600;
+    font-size: 14px;
+}}
+QPushButton[cssClass="save"]:hover {{
+    background-color: {C_BTN_HOVER};
+}}
+
+/* Danger Outline Button */
+QPushButton[cssClass="danger-outline"] {{
+    background-color: transparent;
+    color: {C_ERROR};
+    border: 1px solid #FCA5A5;
+    font-weight: 500;
+}}
+QPushButton[cssClass="danger-outline"]:hover {{
+    background-color: #FEF2F2;
 }}
 
 /* Label */

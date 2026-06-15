@@ -50,8 +50,8 @@ class SettingsPage(QWidget):
         self._config = config
         self._log = log_callback or (lambda msg: None)
         self._model_manager = None
-        self._build()
         self._init_model_manager()
+        self._build()
         self._restore_config()
 
     def _init_model_manager(self):
@@ -61,9 +61,20 @@ class SettingsPage(QWidget):
         except Exception as e:
             logger.warning(f"Failed to init ModelManager: {e}")
 
+    def eventFilter(self, obj, event):
+        """阻止 ComboBox 滚轮变更值，避免误操作"""
+        from PySide6.QtCore import QEvent
+        if event.type() == QEvent.Wheel and isinstance(obj, QComboBox):
+            return True  # 拦截滚轮事件
+        return super().eventFilter(obj, event)
+
+    def _disable_combo_wheel(self, combo):
+        """禁用 ComboBox 滚轮事件"""
+        combo.installEventFilter(self)
+
     def _build(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 12)
+        layout.setContentsMargins(24, 16, 24, 12)
         layout.setSpacing(8)
 
         title = QLabel("设置")
@@ -97,21 +108,35 @@ class SettingsPage(QWidget):
         self._build_notification_section(self._scroll_layout)
         self._build_about_section(self._scroll_layout)
 
-        save_btn_row = QHBoxLayout()
-        save_btn_row.setContentsMargins(0, 8, 0, 20)
-        save_btn = QPushButton("保存设置")
-        save_btn.setFixedSize(140, 36)
-        save_btn.setProperty("cssClass", "primary")
-        save_btn.setCursor(Qt.PointingHandCursor)
-        save_btn.clicked.connect(self._on_save)
-        save_btn_row.addWidget(save_btn)
-        save_btn_row.addStretch()
-        self._scroll_layout.addLayout(save_btn_row)
-
         self._scroll_layout.addStretch()
 
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll, 1)
+
+        save_btn_row = QHBoxLayout()
+        save_btn_row.setContentsMargins(0, 16, 0, 0)
+        save_btn = QPushButton("保存设置")
+        save_btn.setFixedSize(160, 44)
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {C_ACCENT};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 0 24px;
+                min-height: 44px;
+                font-size: 14px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                background-color: {C_BTN_HOVER};
+            }}
+        """)
+        save_btn.setCursor(Qt.PointingHandCursor)
+        save_btn.clicked.connect(self._on_save)
+        save_btn_row.addWidget(save_btn)
+        save_btn_row.addStretch()
+        layout.addLayout(save_btn_row)
 
     def _build_path_section(self, layout):
         """存储路径设置"""
@@ -129,15 +154,11 @@ class SettingsPage(QWidget):
 
         self._engine_combo = QComboBox()
         self._engine_combo.addItems(["FunASR (本地)", "MiMo ASR (云端)"])
-        self._engine_combo.setFixedWidth(180)
+        self._engine_combo.setFixedWidth(200)
         current_engine = self._config.get("transcription_engine", "funasr") if self._config else "funasr"
         self._engine_combo.setCurrentIndex(0 if current_engine == "funasr" else 1)
         self._form_row(group, "转写模式", self._engine_combo)
-
-        sep = QFrame()
-        sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background-color: {C_BORDER}; border: none;")
-        group.layout().addWidget(sep)
+        self._disable_combo_wheel(self._engine_combo)
 
         engine_items = [
             ("标点恢复", ["自动 (ct-punc)", "关闭"], "_punc_var"),
@@ -148,9 +169,10 @@ class SettingsPage(QWidget):
         for label_text, values, attr in engine_items:
             combo = QComboBox()
             combo.addItems(values)
-            combo.setFixedWidth(180)
+            combo.setFixedWidth(200)
             setattr(self, attr, combo)
             self._form_row(group, label_text, combo)
+            self._disable_combo_wheel(combo)
 
     def _build_ai_section(self, layout):
         """AI 服务设置"""
@@ -159,19 +181,21 @@ class SettingsPage(QWidget):
         try:
             from model_registry import get_vendor_list, get_models_for_vendor
         except ImportError:
-            get_vendor_list = lambda: ["小米"]
+            get_vendor_list = lambda: ["小米 MiMo"]
             get_models_for_vendor = lambda v: ["MiMo"]
 
         self._vendor_combo = QComboBox()
         self._vendor_combo.addItems(get_vendor_list())
-        self._vendor_combo.setFixedWidth(180)
+        self._vendor_combo.setFixedWidth(200)
         self._vendor_combo.currentTextChanged.connect(self._on_vendor_changed)
         self._form_row(group, "模型厂商", self._vendor_combo)
+        self._disable_combo_wheel(self._vendor_combo)
 
         self._model_combo = QComboBox()
-        self._model_combo.addItems(get_models_for_vendor("小米"))
-        self._model_combo.setFixedWidth(180)
+        self._model_combo.addItems(get_models_for_vendor("小米 MiMo"))
+        self._model_combo.setFixedWidth(200)
         self._form_row(group, "摘要模型", self._model_combo)
+        self._disable_combo_wheel(self._model_combo)
 
         self._api_key_entry = QLineEdit()
         self._api_key_entry.setEchoMode(QLineEdit.Password)
@@ -209,36 +233,42 @@ class SettingsPage(QWidget):
         self._api_key_toggle.setCursor(Qt.PointingHandCursor)
         self._api_key_toggle.clicked.connect(self._toggle_api_key)
         
-        api_key_row = QHBoxLayout()
-        api_key_row.setSpacing(4)
-        api_key_row.addWidget(self._api_key_entry, 1)
-        api_key_row.addWidget(self._api_key_toggle)
+        # API Key 容器
+        api_key_inner = QHBoxLayout()
+        api_key_inner.setSpacing(4)
+        api_key_inner.setContentsMargins(0, 0, 0, 0)
+        api_key_inner.addWidget(self._api_key_entry, 1)
+        api_key_inner.addWidget(self._api_key_toggle)
         api_key_container = QWidget()
-        api_key_container.setLayout(api_key_row)
+        api_key_container.setLayout(api_key_inner)
         api_key_container.setStyleSheet("background: transparent; border: none;")
         self._form_row(group, "API Key", api_key_container)
 
         self._access_mode_combo = QComboBox()
         self._access_mode_combo.addItems(["按量计费", "Token Plan"])
-        self._access_mode_combo.setFixedWidth(180)
+        self._access_mode_combo.setFixedWidth(200)
         self._form_row(group, "接入模式", self._access_mode_combo,
                        hint_text="Token Plan = 包月套餐 | 按量计费 = 按用量付费")
+        self._disable_combo_wheel(self._access_mode_combo)
 
         self._ollama_combo = QComboBox()
         self._ollama_combo.addItems(["关闭", "Ollama (本地)"])
-        self._ollama_combo.setFixedWidth(180)
+        self._ollama_combo.setFixedWidth(200)
         self._form_row(group, "本地 LLM", self._ollama_combo)
+        self._disable_combo_wheel(self._ollama_combo)
 
         self._auto_summary_combo = QComboBox()
         self._auto_summary_combo.addItems(["转写后自动生成", "关闭", "手动触发"])
-        self._auto_summary_combo.setFixedWidth(180)
+        self._auto_summary_combo.setFixedWidth(200)
         self._form_row(group, "自动摘要", self._auto_summary_combo)
+        self._disable_combo_wheel(self._auto_summary_combo)
 
         self._auto_correction_combo = QComboBox()
         self._auto_correction_combo.addItems(["关闭", "转写后自动纠错"])
-        self._auto_correction_combo.setFixedWidth(180)
+        self._auto_correction_combo.setFixedWidth(200)
         self._form_row(group, "转写纠错", self._auto_correction_combo,
                        hint_text="LLM 纠错转写错字、乱码、标点")
+        self._disable_combo_wheel(self._auto_correction_combo)
 
     def _on_vendor_changed(self, vendor):
         from model_registry import get_models_for_vendor
@@ -258,43 +288,88 @@ class SettingsPage(QWidget):
         """模型管理（含模型详情列表 + 下载按钮）"""
         group = self._create_group("模型管理", layout)
 
+        # 1. 缓存路径
         row_cache = QHBoxLayout()
-        lbl_cache = QLabel(f"模型缓存目录: {MODEL_CACHE_DIR}")
-        lbl_cache.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
+        lbl_cache = QLabel(f"模型缓存: {MODEL_CACHE_DIR}")
+        lbl_cache.setStyleSheet(f"""
+            color: {C_TXT3};
+            font-size: 11px;
+            font-family: "Cascadia Code", Consolas, monospace;
+            background-color: #F9FAFB;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 10px;
+        """)
         lbl_cache.setWordWrap(True)
         row_cache.addWidget(lbl_cache)
         row_cache.addStretch()
         group.layout().addLayout(row_cache)
 
-        self._model_status_frame = QFrame()
-        self._model_status_frame.setStyleSheet("background: transparent; border: none;")
-        self._model_status_layout = QVBoxLayout(self._model_status_frame)
-        self._model_status_layout.setContentsMargins(0, 0, 0, 0)
-        self._model_status_layout.setSpacing(2)
-        group.layout().addWidget(self._model_status_frame)
+        # 2. 模型行容器（固定位置，动态填充）
+        self._model_rows_container = QWidget()
+        self._model_rows_container.setStyleSheet("background: transparent; border: none;")
+        self._model_rows_layout = QVBoxLayout(self._model_rows_container)
+        self._model_rows_layout.setContentsMargins(0, 0, 0, 0)
+        self._model_rows_layout.setSpacing(0)
+        group.layout().addWidget(self._model_rows_container)
 
+        # 3. 状态标签（固定位置）
+        self._model_status_label = QLabel("")
+        self._model_status_label.setStyleSheet(
+            f"color: {C_TXT3}; font-size: 11px; padding: 8px 0 4px 0; background: transparent; border: none;"
+        )
+        group.layout().addWidget(self._model_status_label)
+
+        # 4. 按钮行（固定位置，永远在最底部）
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
+
         self._btn_check_models = QPushButton("检查模型")
-        self._btn_check_models.setFixedHeight(32)
-        self._btn_check_models.setProperty("cssClass", "primary")
+        self._btn_check_models.setFixedSize(120, 40)
+        self._btn_check_models.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {C_ACCENT};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 0 16px;
+                min-height: 40px;
+                font-size: 13px;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background-color: {C_BTN_HOVER};
+            }}
+        """)
         self._btn_check_models.setCursor(Qt.PointingHandCursor)
         self._btn_check_models.clicked.connect(self._check_models)
         btn_row.addWidget(self._btn_check_models)
 
         self._btn_download_models = QPushButton("下载缺失模型")
-        self._btn_download_models.setFixedHeight(32)
-        self._btn_download_models.setProperty("cssClass", "success")
+        self._btn_download_models.setFixedSize(150, 40)
+        self._btn_download_models.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {C_SUCCESS};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 0 16px;
+                min-height: 40px;
+                font-size: 13px;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background-color: #059669;
+            }}
+        """)
         self._btn_download_models.setCursor(Qt.PointingHandCursor)
         self._btn_download_models.clicked.connect(self._download_missing_models)
         btn_row.addWidget(self._btn_download_models)
 
-        self._model_status_label = QLabel("")
-        self._model_status_label.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
-        btn_row.addWidget(self._model_status_label)
         btn_row.addStretch()
         group.layout().addLayout(btn_row)
 
+        # 5. 初始填充模型状态
         self._refresh_model_status()
 
     def _build_audio_section(self, layout):
@@ -346,7 +421,7 @@ class SettingsPage(QWidget):
     def _create_group(self, title, layout):
         """创建分组卡片（标题在卡片外面）"""
         layout.addSpacing(8)
-        title_lbl = QLabel(f"  {title}")
+        title_lbl = QLabel(title)
         title_lbl.setStyleSheet(f"""
             QLabel {{
                 color: {C_TXT2};
@@ -355,6 +430,7 @@ class SettingsPage(QWidget):
                 font-weight: 600;
                 background: transparent;
                 border: none;
+                padding-left: 2px;
             }}
         """)
         layout.addWidget(title_lbl)
@@ -370,7 +446,7 @@ class SettingsPage(QWidget):
         """)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(16, 12, 16, 12)
-        card_layout.setSpacing(6)
+        card_layout.setSpacing(8)
         layout.addWidget(card)
         return card
 
@@ -380,7 +456,7 @@ class SettingsPage(QWidget):
         row.setSpacing(8)
 
         lbl = QLabel(label_text)
-        lbl.setFixedWidth(90)
+        lbl.setFixedWidth(100)
         lbl.setStyleSheet(f"""
             color: {C_TXT2};
             font-family: {FONT_FAMILY};
@@ -399,7 +475,7 @@ class SettingsPage(QWidget):
             hint_row = QHBoxLayout()
             hint_row.setSpacing(12)
             placeholder = QLabel("")
-            placeholder.setFixedWidth(90)
+            placeholder.setFixedWidth(100)
             placeholder.setStyleSheet("background: transparent; border: none;")
             hint_row.addWidget(placeholder)
             hint = QLabel(hint_text)
@@ -453,20 +529,30 @@ class SettingsPage(QWidget):
 
     def _refresh_model_status(self):
         """刷新模型状态显示"""
+        # 清空模型行容器中的所有内容
+        while self._model_rows_layout.count():
+            item = self._model_rows_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
         if not self._model_manager:
+            self._model_status_label.setText("模型管理器未初始化")
+            self._model_status_label.setStyleSheet(
+                f"color: {C_TXT3}; font-size: 11px; padding: 8px 0 4px 0; background: transparent; border: none;"
+            )
             return
 
-        while self._model_status_layout.count():
-            item = self._model_status_layout.takeAt(0)
-            w = item.widget()
-            if w:
-                w.deleteLater()
-
         status = self._model_manager.check_all_models()
+        model_ids = list(status.keys())
 
-        for model_id, state in status.items():
-            row = QHBoxLayout()
+        for i, (model_id, state) in enumerate(status.items()):
+            # 模型行
+            row_widget = QWidget()
+            row_widget.setStyleSheet("background: transparent; border: none;")
+            row = QHBoxLayout(row_widget)
             row.setSpacing(4)
+            row.setContentsMargins(0, 4, 0, 4)
 
             if state["cached"]:
                 icon = icon_status_done()
@@ -501,25 +587,27 @@ class SettingsPage(QWidget):
             status_lbl.setFixedWidth(40)
             row.addWidget(status_lbl)
 
-            container = QWidget()
-            container.setLayout(row)
-            container.setStyleSheet("background: transparent; border: none;")
-            self._model_status_layout.addWidget(container)
+            self._model_rows_layout.addWidget(row_widget)
 
             # 分隔线（非最后一行）
-            if model_id != list(status.keys())[-1]:
+            if i < len(model_ids) - 1:
                 sep = QFrame()
                 sep.setFixedHeight(1)
                 sep.setStyleSheet(f"background-color: #F3F4F6; border: none;")
-                self._model_status_layout.addWidget(sep)
+                self._model_rows_layout.addWidget(sep)
 
+        # 更新状态标签
         missing = self._model_manager.get_missing_models(required_only=True)
         if missing:
             self._model_status_label.setText(f"缺少 {len(missing)} 个必需模型")
-            self._model_status_label.setStyleSheet(f"color: {C_ERROR}; font-size: 11px; background: transparent; border: none;")
+            self._model_status_label.setStyleSheet(
+                f"color: {C_ERROR}; font-size: 11px; padding: 8px 0 4px 0; background: transparent; border: none;"
+            )
         else:
             self._model_status_label.setText("所有必需模型已就绪")
-            self._model_status_label.setStyleSheet(f"color: {C_SUCCESS}; font-size: 11px; background: transparent; border: none;")
+            self._model_status_label.setStyleSheet(
+                f"color: {C_SUCCESS}; font-size: 11px; padding: 8px 0 4px 0; background: transparent; border: none;"
+            )
 
     def _check_models(self):
         """检查模型状态"""
@@ -578,7 +666,7 @@ class SettingsPage(QWidget):
         self._device_var.setCurrentText(self._config.get("device", "CPU"))
 
         if hasattr(self, '_vendor_combo'):
-            vendor = self._config.get("ai_vendor", "小米")
+            vendor = self._config.get("ai_vendor", "小米 MiMo")
             idx = self._vendor_combo.findText(vendor)
             if idx >= 0:
                 self._vendor_combo.setCurrentIndex(idx)

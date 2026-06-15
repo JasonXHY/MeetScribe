@@ -335,16 +335,15 @@ class MeetScribeApp(QMainWindow):
             recording_bar.update_state(is_recording, is_paused)
 
     def _on_recorder_save(self, file_path, duration_s=None):
-        """录音保存回调"""
-        self.file_manager.add_file(file_path, duration_s)
-        self._log(f"录音已保存: {os.path.basename(file_path)}")
+        """录音保存回调（后台线程调用，仅记录日志）"""
+        logger.info(f"Audio file saved: {file_path} (duration={duration_s:.1f}s)" if duration_s else f"Audio file saved: {file_path}")
 
     def _on_recorder_stop_complete(self, saved_files):
         """后台保存完成后回调"""
         QTimer.singleShot(0, lambda: self._handle_stop_complete(saved_files))
 
     def _handle_stop_complete(self, saved_files):
-        """录音停止后处理：添加文件到列表、合并双轨、询问转写"""
+        """录音停止后处理：添加文件到列表、合并双轨、询问转写（主线程执行）"""
         for saved in saved_files:
             self._log(f"录音已保存: {os.path.basename(saved)}")
             existing = self.file_manager.get_file(saved)

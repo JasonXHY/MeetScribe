@@ -12,7 +12,7 @@
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QComboBox, QWidget
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QEvent
 from PySide6.QtGui import QFont
 
 from gui.styles import (
@@ -41,6 +41,12 @@ class RecordingBar(QFrame):
 
         self._setup_ui()
 
+    def eventFilter(self, obj, event):
+        """阻止 ComboBox 滚轮变更值"""
+        if event.type() == QEvent.Wheel and isinstance(obj, QComboBox):
+            return True
+        return super().eventFilter(obj, event)
+
     def _setup_ui(self):
         """初始化 UI"""
         self.setStyleSheet(f"""
@@ -52,7 +58,7 @@ class RecordingBar(QFrame):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)  # 去掉自身 margins，外层已设置
-        layout.setSpacing(0)  # 基础 spacing 为 0，手动控制间距
+        layout.setSpacing(12)  # 统一间距 12px
 
         # 录音指示点
         self._rec_dot = QLabel()
@@ -114,22 +120,8 @@ class RecordingBar(QFrame):
             }}
         """)
         self.mode_combo.currentTextChanged.connect(self._handle_mode_change)
+        self.mode_combo.installEventFilter(self)
         layout.addWidget(self.mode_combo)
-
-        self._rec_mode_hint = QLabel(self._initial_display)
-        self._rec_mode_hint.setFixedWidth(60)
-        self._rec_mode_hint.setStyleSheet(f"""
-            QLabel {{
-                color: {C_TXT3};
-                font-family: {FONT_FAMILY};
-                font-size: 11px;
-                background: transparent;
-                border: none;
-            }}
-        """)
-        layout.addWidget(self._rec_mode_hint)
-
-        layout.addSpacing(6)  # 模式和计时器之间的间距
 
         # 计时器
         self.timer_label = QLabel("00:00:00")
@@ -204,7 +196,6 @@ class RecordingBar(QFrame):
     def _handle_mode_change(self, display_name):
         """处理模式切换"""
         mode = self._MODE_REVERSE.get(display_name, "mic")
-        self._rec_mode_hint.setText(display_name)
         self.mode_changed.emit(mode)
 
     def update_state(self, recording, paused):

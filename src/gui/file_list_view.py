@@ -14,11 +14,11 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QPushButton, QLabel, QFrame
 )
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtCore import Qt, Signal, QSize, QTimer
 from PySide6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter
 
 from gui.icons import (
-    create_icon, icon_play, icon_preview, icon_open_folder,
+    create_icon, icon_play, icon_stop, icon_preview, icon_open_folder,
     icon_speaker, icon_retry, icon_export, icon_delete, icon_merge,
     get_status_icon, get_status_color, IconColors
 )
@@ -46,7 +46,7 @@ class FileListView(QWidget):
         ("时长",   0.10, Qt.AlignCenter),
         ("大小",   0.10, Qt.AlignCenter),
         ("状态",   0.10, Qt.AlignCenter),
-        ("操作",   0.19, Qt.AlignCenter),  # 操作列表头居中
+        ("操作",   0.19, Qt.AlignLeft | Qt.AlignVCenter),  # 操作列表头居中
     ]
 
     # 信号
@@ -101,33 +101,18 @@ class FileListView(QWidget):
         self._table.verticalHeader().setMinimumSectionSize(38)
 
         # 图标尺寸
-        self._table.setIconSize(QSize(6, 6))
+        self._table.setIconSize(QSize(16, 16))
 
         # 样式
         self._table.setStyleSheet("""
             QTableWidget {
-                background-color: white;
                 border: none;
-                font-size: 12px;
             }
             QTableWidget::item {
-                padding: 0 8px;
                 border-bottom: 1px solid #F3F4F6;
-            }
-            QTableWidget::item:selected {
-                background-color: #EFF6FF;
             }
             QTableWidget::item:hover {
                 background-color: #F9FAFB;
-            }
-            QHeaderView::section {
-                background-color: #FAFBFC;
-                border: none;
-                border-bottom: 1px solid #E5E7EB;
-                padding: 0 8px;
-                font-size: 11px;
-                font-weight: 600;
-                color: #9CA3AF;
             }
         """)
 
@@ -138,6 +123,11 @@ class FileListView(QWidget):
         """窗口大小变化时按比例调整列宽"""
         super().resizeEvent(event)
         self._adjust_column_widths()
+
+    def showEvent(self, event):
+        """首次显示时延迟调整列宽，确保 viewport 宽度已确定"""
+        super().showEvent(event)
+        QTimer.singleShot(0, self._adjust_column_widths)
 
     def _adjust_column_widths(self):
         """按比例调整列宽"""
@@ -172,21 +162,33 @@ class FileListView(QWidget):
         # 空状态提示
         if not files:
             self._table.setRowCount(0)
-            if not hasattr(self, '_empty_label'):
-                self._empty_label = QLabel("暂无文件，请点击「添加文件」导入音频")
-                self._empty_label.setAlignment(Qt.AlignCenter)
-                self._empty_label.setStyleSheet(f"""
-                    color: #9CA3AF; font-size: 13px;
-                    background: transparent; border: none;
-                """)
-                self._table.setViewportMargins(0, 40, 0, 0)
-                # 使用 overlay 方式显示空状态
-                self._empty_label.setParent(self._table)
-            self._empty_label.setGeometry(self._table.viewport().rect())
-            self._empty_label.show()
+            if not hasattr(self, '_empty_widget'):
+                from PySide6.QtWidgets import QVBoxLayout
+                self._empty_widget = QWidget()
+                empty_layout = QVBoxLayout(self._empty_widget)
+                empty_layout.setAlignment(Qt.AlignCenter)
+
+                icon_lbl = QLabel("📁")
+                icon_lbl.setStyleSheet("font-size: 40px; color: #D1D5DB; background: transparent; border: none;")
+                icon_lbl.setAlignment(Qt.AlignCenter)
+                empty_layout.addWidget(icon_lbl)
+
+                title_lbl = QLabel("暂无文件")
+                title_lbl.setStyleSheet("font-size: 15px; color: #9CA3AF; font-weight: 500; background: transparent; border: none;")
+                title_lbl.setAlignment(Qt.AlignCenter)
+                empty_layout.addWidget(title_lbl)
+
+                hint_lbl = QLabel("点击「添加文件」导入音频")
+                hint_lbl.setStyleSheet("font-size: 12px; color: #9CA3AF; background: transparent; border: none;")
+                hint_lbl.setAlignment(Qt.AlignCenter)
+                empty_layout.addWidget(hint_lbl)
+
+                self._empty_widget.setParent(self._table)
+            self._empty_widget.setGeometry(self._table.viewport().rect())
+            self._empty_widget.show()
         else:
-            if hasattr(self, '_empty_label'):
-                self._empty_label.hide()
+            if hasattr(self, '_empty_widget'):
+                self._empty_widget.hide()
 
     def _refresh_table(self):
         """刷新表格内容"""

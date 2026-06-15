@@ -65,13 +65,16 @@ class Config:
             old_key = self._data.get("mimo_api_key", "")
             old_model = self._data.get("mimo_model", "mimo-v2.5-pro")
 
-            # 模型名映射表
+            # 模型名映射表（旧版 → 新版）
             model_map = {
-                "mimo-v2.5-pro": ("小米", "MiMo-V2.5-Pro"),
-                "mimo-v2.5": ("小米", "MiMo-V2.5"),
-                "mimo-v2-flash": ("小米", "MiMo-V2-Flash"),
+                "mimo-v2.5-pro": ("小米 MiMo", "mimo-v2.5-pro"),
+                "mimo-v2.5": ("小米 MiMo", "mimo-v2.5"),
+                "mimo-v2-flash": ("小米 MiMo", "mimo-v2.5"),  # V2 Flash 已停服，迁移到 V2.5
+                "MiMo-V2.5-Pro": ("小米 MiMo", "mimo-v2.5-pro"),
+                "MiMo-V2.5": ("小米 MiMo", "mimo-v2.5"),
+                "MiMo-V2-Flash": ("小米 MiMo", "mimo-v2.5"),
             }
-            vendor, model = model_map.get(old_model, ("小米", "MiMo-V2.5-Pro"))
+            vendor, model = model_map.get(old_model, ("小米 MiMo", "mimo-v2.5-pro"))
 
             self._data["ai_vendor"] = vendor
             self._data["ai_model"] = model
