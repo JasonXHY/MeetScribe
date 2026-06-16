@@ -303,3 +303,67 @@ class TestWorkerMergeBranch:
         content = open(merge_done[0][2], encoding="utf-8").read()
         assert "## a.wav" in content and "## b.wav" in content
         assert "本地" not in content and "远程" not in content
+
+
+# ══════════════════════════════════════════════════════════
+#  T-G5: 本地-N/远程-N 标注端到端（SPK-008）
+#
+#  验证完整链路：双轨转写文本 → build_merged_transcript 合并 →
+#  写入结果文件（worker 产物）→ parse_speakers_from_result
+#  （发言人管理弹窗实际调用的解析入口）→ 说话人条目带本地/远程标签。
+#  解析侧与合并侧此前各有单测，这里锁定二者拼接后的端到端正确性。
+# ══════════════════════════════════════════════════════════
+
+class TestLocalRemoteLabelsEndToEnd:
+    def _make_pair(self, tmp_path):
+        mic = tmp_path / "25061612会议.wav"
+        sys = tmp_path / "25061612会议_系统音频.wav"
+        mic.write_bytes(b"RIFF")
+        sys.write_bytes(b"RIFF")
+        return str(mic), str(sys)
+
+    def test_local_remote_labels_end_to_end(self, tmp_path):
+        """双轨合并文本经弹窗解析路径后，条目带 本地-N / 远程-N 标签。"""
+        from gui.dialogs import parse_speakers_from_result
+
+        mic_path, sys_path = self._make_pair(tmp_path)
+        texts = {
+            mic_path: "[00:01] Speaker 1: 你好\n[00:09] Speaker 2: 我也在",
+            sys_path: "[00:03] Speaker 1: 听得到吗\n[00:07] Speaker 2: 在的",
+        }
+        # 合并（worker 实际调用的纯函数）
+        merged, is_dual = build_merged_transcript([mic_path, sys_path], texts)
+        assert is_dual is True
+
+        # 写入结果文件（worker 产物），再走弹窗解析入口
+        result = tmp_path / "result.md"
+        result.write_text(merged, encoding="utf-8")
+        speakers = parse_speakers_from_result(str(result))
+
+        labels = {s["label"] for s in speakers}
+        assert "本地-1" in labels
+        assert "本地-2" in labels
+        assert "远程-1" in labels
+        assert "远程-2" in labels
+        # 双轨标签下不应混入裸 Speaker 条目
+        assert not any(str(s["label"]).startswith("Speaker") for s in speakers)
+
+    def test_end_to_end_supports_naming(self, tmp_path):
+        """端到端解析出的本地/远程条目可逐个命名（saved_names 回填）。"""
+        from gui.dialogs import parse_speakers_from_result
+
+        mic_path, sys_path = self._make_pair(tmp_path)
+        texts = {
+            mic_path: "[00:01] Speaker 1: 你好",
+            sys_path: "[00:03] Speaker 1: 听得到吗",
+        }
+        merged, _ = build_merged_transcript([mic_path, sys_path], texts)
+        result = tmp_path / "result.md"
+        result.write_text(merged, encoding="utf-8")
+
+        speakers = parse_speakers_from_result(
+            str(result), saved_names={"本地-1": "张三", "远程-1": "李四"}
+        )
+        by_label = {s["label"]: s["name"] for s in speakers}
+        assert by_label.get("本地-1") == "张三"
+        assert by_label.get("远程-1") == "李四"
