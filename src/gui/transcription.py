@@ -523,11 +523,14 @@ class TranscriptionHandler(QObject):
 
             try:
                 from ai_service import AIService
+                # 透传 Ollama 本地 LLM 配置（地址 / 模型），供姓名提取等本地路径使用（AI-005 / SET-016）
                 self._ai_service = AIService(
                     vendor=vendor or "小米",
                     model=self._app.config.get("ai_model", "mimo-v2.5"),
                     access_mode=self._app.config.get("ai_access_mode", "按量计费"),
                     api_key=api_key,
+                    ollama_url=self._app.config.get("ollama_url", None),
+                    ollama_model=self._app.config.get("ollama_model", None),
                 )
             except Exception as e:
                 logger.error(f"Failed to init AIService: {e}")

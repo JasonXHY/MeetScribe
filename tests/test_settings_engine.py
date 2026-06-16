@@ -186,6 +186,35 @@ class TestRestoreConfig:
         assert page._device_var.currentText() == "CUDA (GPU)"
 
 
+class TestOllamaConfig:
+    """Ollama 本地 LLM 地址 / 模型配置（SET-016）"""
+
+    def test_ollama_address_field_exists(self, config, app):
+        page = _create_settings_page(config)
+        assert hasattr(page, '_ollama_url_entry')
+        assert hasattr(page, '_ollama_model_entry')
+
+    def test_ollama_address_default(self, config, app):
+        page = _create_settings_page(config)
+        assert page._ollama_url_entry.text() == "http://localhost:11434/v1"
+        assert page._ollama_model_entry.text() == "qwen3:1.7b"
+
+    def test_ollama_address_save_restore(self, config, app):
+        page = _create_settings_page(config)
+        page._ollama_url_entry.setText("http://host:1234/v1")
+        page._ollama_model_entry.setText("llama3")
+        with patch('gui.settings_page.QMessageBox'):
+            page._on_save()
+
+        assert config.get("ollama_url") == "http://host:1234/v1"
+        assert config.get("ollama_model") == "llama3"
+
+        # 重建页面，确认回填
+        page2 = _create_settings_page(config)
+        assert page2._ollama_url_entry.text() == "http://host:1234/v1"
+        assert page2._ollama_model_entry.text() == "llama3"
+
+
 class TestModelManagement:
     """模型管理按钮和状态"""
 

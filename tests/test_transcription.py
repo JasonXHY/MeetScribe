@@ -346,3 +346,34 @@ class TestQualityEstimation:
         # 10+ 段 120 秒
         q = _compute_quality(10, 120.0)
         assert q >= 0.90
+
+
+class TestGetAIServiceOllamaForwarding:
+    """_get_ai_service 应将 config 中的 ollama 配置透传给 AIService（AI-005）"""
+
+    def _create_handler(self, config_overrides=None):
+        from gui.transcription import TranscriptionHandler
+        defaults = {
+            "ai_vendor": "小米",
+            "ai_user_api_key": "",
+            "ai_default_api_key": "sk-test",
+            "ai_model": "mimo-v2.5",
+            "ai_access_mode": "按量计费",
+            "ollama_url": "http://host:1234/v1",
+            "ollama_model": "llama3",
+        }
+        if config_overrides:
+            defaults.update(config_overrides)
+        mock_app = MagicMock()
+        mock_app.config.get.side_effect = lambda k, d=None: defaults.get(k, d)
+        handler = TranscriptionHandler(mock_app)
+        return handler
+
+    def test_get_ai_service_forwards_ollama_config(self):
+        handler = self._create_handler()
+        with patch('ai_service.AIService') as MockAIService:
+            handler._get_ai_service()
+            assert MockAIService.called
+            _, kwargs = MockAIService.call_args
+            assert kwargs.get("ollama_url") == "http://host:1234/v1"
+            assert kwargs.get("ollama_model") == "llama3"

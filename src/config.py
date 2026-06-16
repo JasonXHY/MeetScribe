@@ -33,6 +33,10 @@ DEFAULTS = {
     "ai_access_mode": "按量计费",
     "ai_default_api_key": "sk-c4wihuvmfe4fv7qurdhk975rinuxflgi056dphuvv25x8lbm",
     "ai_user_api_key": "",
+    # 本地 LLM（Ollama）配置：启用开关 + 服务地址 + 模型名（AI-005 / SET-016）
+    "ollama_enabled": "关闭",
+    "ollama_url": "http://localhost:11434/v1",
+    "ollama_model": "qwen3:1.7b",
 }
 
 
