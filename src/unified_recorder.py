@@ -16,6 +16,19 @@ from datetime import datetime
 
 from dual_track_merge import SYS_TRACK_SUFFIX
 
+
+def _recording_filename_stamp(dt=None):
+    """录音文件名时间戳：MMDDHH（REC-010 验收标准）。
+
+    Args:
+        dt: datetime 实例；默认取当前时间。
+    Returns:
+        6 位字符串，月日时各两位，例如 061614。
+    """
+    if dt is None:
+        dt = datetime.now()
+    return dt.strftime("%m%d%H")
+
 logger = logging.getLogger("MeetScribe")
 
 
@@ -216,7 +229,7 @@ class UnifiedRecorder:
         self._pause_start = None
         self._mic_rate = None
         self._sys_rate = None
-        ts = datetime.now().strftime("%y%m%d%H")
+        ts = _recording_filename_stamp()
 
         # 清空上次残留的队列数据
         for q in (self._mic_queue, self._sys_queue):

@@ -28,6 +28,12 @@ from gui.file_list_view import FileListView
 
 logger = logging.getLogger("MeetScribe")
 
+# FILE-001: 导入音频文件过滤器（含 spec 要求的全部格式 WAV/MP3/FLAC/M4A/AAC/OGG/WMA）
+AUDIO_FILE_FILTER = (
+    "音频文件 (*.wav *.mp3 *.m4a *.flac *.aac *.ogg *.oga *.opus *.wma);;"
+    "所有文件 (*.*)"
+)
+
 USER_FRIENDLY_KEYWORDS = [
     "录音已开始", "录音已停止", "录音已保存",
     "转写完成", "转写已停止", "转写中", "正在转写",
@@ -458,8 +464,7 @@ class HomePage(QWidget):
     def _add_files(self):
         """添加音频文件"""
         paths, _ = QFileDialog.getOpenFileNames(
-            self, "选择音频文件", "",
-            "音频文件 (*.wav *.mp3 *.m4a *.flac *.ogg *.oga *.opus);;所有文件 (*.*)"
+            self, "选择音频文件", "", AUDIO_FILE_FILTER
         )
         if not paths:
             return
