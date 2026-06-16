@@ -57,6 +57,10 @@ class FileListView(QWidget):
         super().__init__(parent)
         self._file_data = []  # 文件数据列表
         self._selected_paths = set()
+        # 增量更新状态（FILE-004）：file_path -> 该行已渲染的快照，用于检测变化
+        # {path: {"status": str, "name": str, "topic": str,
+        #         "duration": str, "size": str, "queue_pos": Any}}
+        self._row_state = {}
         self._build_ui()
 
     def _build_ui(self):
@@ -156,12 +160,31 @@ class FileListView(QWidget):
                     "queue_pos": int,
                 }
         """
+        self.refresh(files)
+
+    def refresh(self, files):
+        """
+        增量刷新文件列表（FILE-004）。
+
+        以 ``file_path`` 为主键 diff 当前已渲染状态与新数据：
+        - 新增文件 → 追加行；
+        - 删除文件 → 移除对应行；
+        - 顺序变化 → 移动行；
+        - 状态/时长/主题等变化 → 只更新该行受影响的单元格/按钮；
+        若 files 未变化，则不重建任何行（控件实例保持不变）。
+
+        Args:
+            files: 同 ``set_files`` 的文件数据 dict 列表。
+        """
+        files = files or []
         self._file_data = files
-        self._refresh_table()
+
+        self._apply_incremental(files)
 
         # 空状态提示
         if not files:
             self._table.setRowCount(0)
+            self._row_state.clear()
             if not hasattr(self, '_empty_widget'):
                 from PySide6.QtWidgets import QVBoxLayout
                 self._empty_widget = QWidget()
@@ -190,14 +213,110 @@ class FileListView(QWidget):
             if hasattr(self, '_empty_widget'):
                 self._empty_widget.hide()
 
-    def _refresh_table(self):
-        """刷新表格内容"""
-        self._table.setRowCount(len(self._file_data))
+    # ------------------------------------------------------------------ #
+    # 增量更新引擎（FILE-004）
+    # ------------------------------------------------------------------ #
+    def _current_row_paths(self) -> list:
+        """按当前表格行顺序返回 file_path 列表（来自文件名单元格的 toolTip）。"""
+        paths = []
+        for row in range(self._table.rowCount()):
+            item = self._table.item(row, 1)
+            paths.append(item.toolTip() if item is not None else None)
+        return paths
 
-        for row, file_info in enumerate(self._file_data):
-            self._create_row(row, file_info)
+    @staticmethod
+    def _snapshot(file_info: dict) -> dict:
+        """提取影响渲染的字段，用于检测某行是否发生变化。"""
+        return {
+            "name": file_info.get("name", ""),
+            "topic": file_info.get("topic", ""),
+            "duration": file_info.get("duration", ""),
+            "size": file_info.get("size", ""),
+            "status": file_info.get("status", "pending"),
+            "queue_pos": file_info.get("queue_pos"),
+        }
+
+    def _apply_incremental(self, files: list):
+        """以 file_path 为主键，将表格增量更新为 files。"""
+        new_paths = [f.get("path", "") for f in files]
+        new_set = set(new_paths)
+
+        # 1) 删除不再存在的行（从底部向上删，保持其余行控件实例不变）
+        for row in range(self._table.rowCount() - 1, -1, -1):
+            item = self._table.item(row, 1)
+            path = item.toolTip() if item is not None else None
+            if path not in new_set:
+                self._table.removeRow(row)
+                self._row_state.pop(path, None)
+
+        # 2) 按目标顺序就地更新 / 插入，使行顺序与 files 一致
+        for target_row, file_info in enumerate(files):
+            path = file_info.get("path", "")
+            current_paths = self._current_row_paths()
+
+            if path in current_paths:
+                cur_row = current_paths.index(path)
+                if cur_row != target_row:
+                    # 顺序变化：重建该行到目标位置（保持其它行不变）
+                    self._table.removeRow(cur_row)
+                    self._row_state.pop(path, None)
+                    self._table.insertRow(target_row)
+                    self._create_row(target_row, file_info)
+                    self._row_state[path] = self._snapshot(file_info)
+                else:
+                    # 同位置：仅当内容变化时就地更新单元格/按钮
+                    snap = self._snapshot(file_info)
+                    if self._row_state.get(path) != snap:
+                        self._update_row(target_row, file_info)
+                        self._row_state[path] = snap
+            else:
+                # 新增文件：在目标位置插入新行
+                self._table.insertRow(target_row)
+                self._create_row(target_row, file_info)
+                self._row_state[path] = self._snapshot(file_info)
 
         self._adjust_column_widths()
+
+    def _update_row(self, row: int, file_info: dict):
+        """就地更新一行的单元格内容与操作按钮，不重建已存在的 item 实例。"""
+        prev = self._row_state.get(file_info.get("path", ""), {})
+
+        # 队列号
+        queue_item = self._table.item(row, 0)
+        if queue_item is not None:
+            queue_item.setText(str(file_info["queue_pos"]) if file_info.get("queue_pos") else "")
+
+        # 文件名
+        name_item = self._table.item(row, 1)
+        if name_item is not None:
+            name_item.setText(file_info.get("name", ""))
+            name_item.setToolTip(file_info.get("path", ""))
+
+        # 主题
+        topic_item = self._table.item(row, 2)
+        if topic_item is not None:
+            topic_item.setText(file_info.get("topic", ""))
+
+        # 时长
+        dur_item = self._table.item(row, 3)
+        if dur_item is not None:
+            dur_item.setText(file_info.get("duration", ""))
+
+        # 大小
+        size_item = self._table.item(row, 4)
+        if size_item is not None:
+            size_item.setText(file_info.get("size", ""))
+
+        # 状态（保持 item 实例，仅更新图标/提示）
+        status = file_info.get("status", "pending")
+        status_item = self._table.item(row, 5)
+        if status_item is not None:
+            status_item.setIcon(get_status_icon(status))
+            status_item.setToolTip(self._get_status_text(status))
+
+        # 操作按钮：仅当状态变化（按钮集合依赖状态）时重建该单元格控件
+        if prev.get("status") != status or self._table.cellWidget(row, 6) is None:
+            self._create_action_buttons(row, file_info)
 
     def _create_row(self, row: int, file_info: dict):
         """创建一行数据"""
