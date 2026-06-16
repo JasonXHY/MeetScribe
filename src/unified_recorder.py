@@ -14,6 +14,8 @@ import logging
 import numpy as np
 from datetime import datetime
 
+from dual_track_merge import SYS_TRACK_SUFFIX
+
 logger = logging.getLogger("MeetScribe")
 
 
@@ -227,7 +229,7 @@ class UnifiedRecorder:
         if mode in ("mic", "dual"):
             self._mic_file = os.path.join(self.save_dir, f"{ts}会议.wav")
         if mode == "dual":
-            self._sys_file = os.path.join(self.save_dir, f"{ts}会议_系统音频.wav")
+            self._sys_file = os.path.join(self.save_dir, f"{ts}会议{SYS_TRACK_SUFFIX}.wav")
 
         self._recording = True
         self._paused = False

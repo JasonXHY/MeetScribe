@@ -11,6 +11,13 @@ import logging
 
 logger = logging.getLogger("MeetScribe")
 
+# 系统音频轨文件名后缀（与 unified_recorder 写出的命名保持一致）。
+# 录音器保存系统音频轨为 "{ts}会议_系统音频.wav"，配对逻辑以此为准。
+SYS_TRACK_SUFFIX = "_系统音频"
+# 历史后缀（旧版数据兼容）。
+LEGACY_SYS_TRACK_SUFFIX = "_sys"
+_SYS_SUFFIXES = (SYS_TRACK_SUFFIX, LEGACY_SYS_TRACK_SUFFIX)
+
 # 匹配时间戳格式: [HH:MM] 或 [HH:MM:SS]
 TIMESTAMP_RE = re.compile(r'\[(\d{2}):(\d{2})(?::(\d{2}))?\]')
 
@@ -90,17 +97,21 @@ def find_dual_track_pair(file_path):
     """
     base, ext = os.path.splitext(file_path)
 
-    # 检查是否是系统音频文件
-    if base.endswith('_sys'):
-        mic_path = base[:-4] + ext  # 去掉 _sys 后缀
-        if os.path.exists(mic_path):
-            return (mic_path, file_path)
-        return None
+    # 情况一：传入的是系统音频轨文件 → 反查麦克风轨
+    # 同时识别新后缀 "_系统音频" 与历史后缀 "_sys"
+    for suffix in _SYS_SUFFIXES:
+        if base.endswith(suffix):
+            mic_path = base[:-len(suffix)] + ext
+            if os.path.exists(mic_path):
+                return (mic_path, file_path)
+            return None
 
-    # 检查是否有对应的系统音频文件
-    sys_path = base + '_sys' + ext
-    if os.path.exists(sys_path):
-        return (file_path, sys_path)
+    # 情况二：传入的是麦克风轨文件 → 查找对应系统音频轨
+    # 优先新后缀，回退历史后缀
+    for suffix in _SYS_SUFFIXES:
+        sys_path = base + suffix + ext
+        if os.path.exists(sys_path):
+            return (file_path, sys_path)
 
     return None
 
