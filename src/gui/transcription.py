@@ -277,6 +277,9 @@ class TranscriptionHandler(QObject):
         else:
             logger.warning("[VOICEPRINT] No speaker embeddings received, skipping match")
 
+        # 发言人姓名提取（AI-003）：声纹 confirmed > 姓名提取 > 保留 Speaker N
+        self._apply_speaker_names()
+
         # 清理资源
         try:
             if self._process:
@@ -416,6 +419,92 @@ class TranscriptionHandler(QObject):
             if embedding is not None:
                 embeddings[int(spk_id)] = embedding
         return embeddings
+
+    # ══════════════════════════════════════════════════════════
+    #  Speaker Name Extraction (AI-003)
+    # ══════════════════════════════════════════════════════════
+
+    def _apply_speaker_names(self):
+        """从转写文本提取发言人真实姓名并应用到结果（AI-003）。
+
+        优先级：声纹高置信（confirmed）匹配 > 姓名提取（正则优先 + LLM 兜底）> 保留 Speaker N。
+        即：已被声纹 confirmed 命名的说话人不会被本步骤覆盖。
+        正则优先；正则无果且配置了可用 AI 服务时才走 LLM 兜底。
+        懒加载导入 SpeakerNamer，使本模块在无 funasr 环境下仍可导入。
+        """
+        try:
+            if not (self._app and hasattr(self._app, 'file_manager')):
+                return
+
+            from speaker_namer import SpeakerNamer
+            namer = SpeakerNamer()
+
+            # 已被声纹 confirmed 命名的说话人（0 基 id → 转写文本中的 1 基 Speaker 编号）
+            confirmed_ids = {
+                int(spk_id) + 1
+                for spk_id, info in (self._voiceprint_match_results or {}).items()
+                if isinstance(info, dict) and info.get("confidence") == "confirmed"
+            }
+
+            for item in self._app.file_manager.files:
+                if item.status != FileStatus.DONE or not item.result_path:
+                    continue
+                if item.file_path not in self._current_batch_paths:
+                    continue
+                if not os.path.exists(item.result_path):
+                    continue
+
+                # 读取转写文本
+                try:
+                    with open(item.result_path, "r", encoding="utf-8") as f:
+                        transcript = f.read()
+                except Exception as e:
+                    logger.warning(f"读取转写文件失败，跳过姓名提取: {e}")
+                    continue
+
+                # 收集转写中出现的 Speaker 编号（1 基），排除已被声纹 confirmed 命名的
+                speaker_ids = sorted({
+                    int(n) for n in re.findall(r'(?<!\w)Speaker\s+(\d+)(?!\w)', transcript)
+                })
+                target_ids = [str(n) for n in speaker_ids if n not in confirmed_ids]
+                if not target_ids:
+                    continue
+
+                # 正则优先；正则无果时若有可用 AI 服务则 LLM 兜底
+                ai_service = self._get_ai_service()
+                name_map = namer.extract_names(
+                    transcript, target_ids, ai_service=ai_service
+                )
+                if not name_map:
+                    continue
+
+                # 转为 {int(1 基编号): 姓名}，再次过滤 confirmed 说话人
+                int_mapping = {
+                    int(sid): name
+                    for sid, name in name_map.items()
+                    if name and int(sid) not in confirmed_ids
+                }
+                if not int_mapping:
+                    continue
+
+                # 应用到转写结果与摘要文件
+                apply_speaker_mapping(item.result_path, int_mapping)
+                summary_path = get_summary_path(item.result_path)
+                if summary_path and os.path.exists(summary_path):
+                    apply_speaker_mapping(summary_path, int_mapping)
+
+                # 合并写入说话人映射（保留已有的声纹命名）
+                str_mapping = item.speaker_names or {}
+                for sid, name in int_mapping.items():
+                    str_mapping[str(sid)] = name
+                self._app.file_manager.update_speaker_names(item.file_path, str_mapping)
+
+                self.log_message.emit(
+                    "姓名提取: "
+                    + ", ".join(f"Speaker {k}→{v}" for k, v in int_mapping.items())
+                )
+        except Exception as e:
+            logger.error(f"发言人姓名提取失败: {e}", exc_info=True)
 
     # ══════════════════════════════════════════════════════════
     #  AI Service
