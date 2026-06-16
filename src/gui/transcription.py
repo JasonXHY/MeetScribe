@@ -364,7 +364,16 @@ class TranscriptionHandler(QObject):
             logger.error(f"Voiceprint matching failed: {e}")
 
     def _apply_voiceprint_match(self, name, speaker_id, confidence, embedding, library):
-        """将单个说话人的匹配结果写入文件"""
+        """将单个说话人的匹配结果写入文件，并记录到 _voiceprint_match_results。
+
+        匹配记录会先行写入 self._voiceprint_match_results（供摘要注入 AI-006 使用），
+        即使后续写文件或自动追加声纹样本失败，匹配结果仍然保留。
+        """
+        # 记录匹配结果（供摘要注入与姓名提取优先级判断使用）
+        self._voiceprint_match_results[speaker_id] = {
+            "name": name,
+            "confidence": confidence,
+        }
         try:
             if self._app and hasattr(self._app, 'file_manager'):
                 for item in self._app.file_manager.files:
@@ -396,18 +405,6 @@ class TranscriptionHandler(QObject):
                             logger.info(f"自动添加声纹样本: {name}")
         except Exception as e:
             logger.error(f"Apply voiceprint match failed: {e}")
-
-            if matched_count > 0:
-                logger.info(f"[VOICEPRINT] Matched {matched_count} speakers")
-                self.log_message.emit(f"音色库匹配完成: {matched_count} 位说话人已识别")
-            else:
-                logger.info("[VOICEPRINT] No speakers matched")
-                self.log_message.emit("音色库匹配: 未找到匹配的说话人")
-
-        except ImportError:
-            logger.debug("Voiceprint module not available, skipping matching")
-        except Exception as e:
-            logger.error(f"Voiceprint matching failed: {e}", exc_info=True)
 
     def _extract_speaker_embeddings(self):
         """从接收到的嵌入向量中提取每个说话人的代表向量"""

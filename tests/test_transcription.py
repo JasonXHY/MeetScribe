@@ -105,7 +105,8 @@ class TestMatchVoiceprintsAutoAdd:
         # Mock 音色库
         mock_library = MagicMock()
         MockLibrary.return_value = mock_library
-        mock_library.match_with_confidence.return_value = ("张三", "confirmed")
+        # 高置信度匹配：score >= HIGH_CONFIDENCE(0.50) -> confirmed
+        mock_library.match.return_value = ("张三", 0.8)
 
         # Mock file_manager
         mock_item = MagicMock()
@@ -136,7 +137,8 @@ class TestMatchVoiceprintsAutoAdd:
 
         mock_library = MagicMock()
         MockLibrary.return_value = mock_library
-        mock_library.match_with_confidence.return_value = ("张三", "suggested")
+        # 低置信度匹配：MATCH_THRESHOLD(0.31) <= score < HIGH_CONFIDENCE(0.50) -> suggested
+        mock_library.match.return_value = ("张三", 0.4)
 
         mock_item = MagicMock()
         mock_item.status = FileStatus.DONE
@@ -162,7 +164,8 @@ class TestMatchVoiceprintsAutoAdd:
 
         mock_library = MagicMock()
         MockLibrary.return_value = mock_library
-        mock_library.match_with_confidence.return_value = (None, "no_match")
+        # 无匹配：name 为 None
+        mock_library.match.return_value = (None, 0.0)
 
         handler._match_voiceprints()
 
@@ -181,7 +184,8 @@ class TestMatchVoiceprintsAutoAdd:
 
         mock_library = MagicMock()
         MockLibrary.return_value = mock_library
-        mock_library.match_with_confidence.return_value = ("张三", "confirmed")
+        # 高置信度匹配：score >= HIGH_CONFIDENCE(0.50) -> confirmed
+        mock_library.match.return_value = ("张三", 0.8)
         mock_library.add_speaker.side_effect = Exception("写入失败")
 
         mock_item = MagicMock()
@@ -200,6 +204,131 @@ class TestMatchVoiceprintsAutoAdd:
         # 匹配仍然完成（检查 log_message 信号被发射）
         # log_message 是 Signal，不是 MagicMock，所以检查 _voiceprint_match_results
         assert handler._voiceprint_match_results == {0: {"name": "张三", "confidence": "confirmed"}}
+
+
+class TestSummaryVoiceprintInjection:
+    """AI-006: 音色库匹配结果注入摘要端到端（_voiceprint_match_results -> generate_summary）"""
+
+    def _create_handler(self):
+        from gui.transcription import TranscriptionHandler
+        mock_app = MagicMock()
+        handler = TranscriptionHandler(mock_app)
+        return handler
+
+    def test_matches_passed_to_summary(self, tmp_path):
+        """匹配结果应原样传入 generate_summary 的 voiceprint_matches 参数"""
+        handler = self._create_handler()
+        handler._voiceprint_match_results = {0: {"name": "张三", "confidence": "confirmed"}}
+
+        # mock AIService 捕获传入的 voiceprint_matches
+        mock_ai = MagicMock()
+        mock_ai.generate_summary.return_value = "# 会议主题\n\n摘要正文"
+        handler._get_ai_service = MagicMock(return_value=mock_ai)
+
+        out_dir = str(tmp_path)
+        handler._generate_summary("Speaker 1: 大家好", "meeting", out_dir)
+
+        # 断言 generate_summary 收到 voiceprint_matches 且含张三
+        mock_ai.generate_summary.assert_called_once()
+        _, kwargs = mock_ai.generate_summary.call_args
+        assert kwargs.get("voiceprint_matches") == {0: {"name": "张三", "confidence": "confirmed"}}
+
+    def test_prompt_references_identified_speaker(self):
+        """generate_summary 构建的 system prompt 应含"已识别的说话人"段落并引用张三"""
+        from ai_service import AIService
+
+        ai = AIService(vendor="测试", model="m", api_key="dummy-key")
+
+        captured = {}
+
+        class _FakeCompletions:
+            def create(self, *args, **kwargs):
+                captured["messages"] = kwargs["messages"]
+
+                class _Msg:
+                    content = "# 会议主题\n\n摘要"
+
+                class _Choice:
+                    message = _Msg()
+
+                class _Resp:
+                    choices = [_Choice()]
+
+                return _Resp()
+
+        class _FakeChat:
+            completions = _FakeCompletions()
+
+        class _FakeClient:
+            chat = _FakeChat()
+
+        # 直接注入底层 client，绕过惰性创建的 OpenAI 实例
+        ai._ai_client = _FakeClient()
+
+        ai.generate_summary(
+            "Speaker 1: 大家好",
+            voiceprint_matches={0: {"name": "张三", "confidence": "confirmed"}},
+        )
+
+        system_prompt = captured["messages"][0]["content"]
+        # 注入段落的专属标记（区别于 system prompt 规则中固有的"已识别的说话人"措辞）
+        assert "【已识别的说话人（音色库匹配结果" in system_prompt
+        assert "张三" in system_prompt
+        assert "Speaker 1" in system_prompt
+
+    def test_empty_matches_no_section_no_crash(self):
+        """空匹配时不注入"已识别的说话人"段落，且正常生成"""
+        from ai_service import AIService
+
+        ai = AIService(vendor="测试", model="m", api_key="dummy-key")
+
+        captured = {}
+
+        class _FakeCompletions:
+            def create(self, *args, **kwargs):
+                captured["messages"] = kwargs["messages"]
+
+                class _Msg:
+                    content = "# 会议主题\n\n摘要"
+
+                class _Choice:
+                    message = _Msg()
+
+                class _Resp:
+                    choices = [_Choice()]
+
+                return _Resp()
+
+        class _FakeChat:
+            completions = _FakeCompletions()
+
+        class _FakeClient:
+            chat = _FakeChat()
+
+        # 直接注入底层 client，绕过惰性创建的 OpenAI 实例
+        ai._ai_client = _FakeClient()
+
+        # 空 dict 与 None 都不应注入段落、不应报错
+        for matches in ({}, None):
+            result = ai.generate_summary("Speaker 1: 你好", voiceprint_matches=matches)
+            assert not result.startswith("[错误]")
+            system_prompt = captured["messages"][0]["content"]
+            # 空匹配时不应出现注入段落（其专属标记缺失）
+            assert "【已识别的说话人（音色库匹配结果" not in system_prompt
+
+    def test_handler_empty_matches_no_crash(self, tmp_path):
+        """handler 在无匹配结果时调用 generate_summary 不报错"""
+        handler = self._create_handler()
+        handler._voiceprint_match_results = {}
+
+        mock_ai = MagicMock()
+        mock_ai.generate_summary.return_value = "# 会议主题\n\n摘要正文"
+        handler._get_ai_service = MagicMock(return_value=mock_ai)
+
+        handler._generate_summary("Speaker 1: 大家好", "meeting", str(tmp_path))
+
+        _, kwargs = mock_ai.generate_summary.call_args
+        assert kwargs.get("voiceprint_matches") == {}
 
 
 class TestQualityEstimation:
