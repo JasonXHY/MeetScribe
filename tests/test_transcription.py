@@ -102,10 +102,10 @@ class TestMatchVoiceprintsAutoAdd:
         embedding = np.random.rand(512).tolist()
         handler._speaker_embeddings = {0: embedding}
 
-        # Mock 音色库
+        # Mock 音色库：match() 返回 (name, score)，score>=0.50 → confirmed
         mock_library = MagicMock()
         MockLibrary.return_value = mock_library
-        mock_library.match_with_confidence.return_value = ("张三", "confirmed")
+        mock_library.match.return_value = ("张三", 0.8)
 
         # Mock file_manager
         mock_item = MagicMock()
@@ -134,16 +134,19 @@ class TestMatchVoiceprintsAutoAdd:
         embedding = np.random.rand(512).tolist()
         handler._speaker_embeddings = {0: embedding}
 
+        # match() 返回 0.31<=score<0.50 → suggested（不自动回写）
         mock_library = MagicMock()
         MockLibrary.return_value = mock_library
-        mock_library.match_with_confidence.return_value = ("张三", "suggested")
+        mock_library.match.return_value = ("张三", 0.4)
 
         mock_item = MagicMock()
         mock_item.status = FileStatus.DONE
         mock_item.result_path = "/tmp/test.md"
         mock_item.speaker_names = {"0": "Speaker 0"}
         mock_item.file_path = "/tmp/test.wav"
+        mock_item.file_name = "test.wav"
         handler._app.file_manager.files = [mock_item]
+        handler._current_batch_paths = {"/tmp/test.wav"}
 
         with patch('os.path.exists', return_value=True), \
              patch('gui.transcription.apply_speaker_mapping'):
@@ -160,9 +163,10 @@ class TestMatchVoiceprintsAutoAdd:
         embedding = np.random.rand(512).tolist()
         handler._speaker_embeddings = {0: embedding}
 
+        # match() 无匹配返回 (None, 0)
         mock_library = MagicMock()
         MockLibrary.return_value = mock_library
-        mock_library.match_with_confidence.return_value = (None, "no_match")
+        mock_library.match.return_value = (None, 0)
 
         handler._match_voiceprints()
 
@@ -181,7 +185,7 @@ class TestMatchVoiceprintsAutoAdd:
 
         mock_library = MagicMock()
         MockLibrary.return_value = mock_library
-        mock_library.match_with_confidence.return_value = ("张三", "confirmed")
+        mock_library.match.return_value = ("张三", 0.8)
         mock_library.add_speaker.side_effect = Exception("写入失败")
 
         mock_item = MagicMock()

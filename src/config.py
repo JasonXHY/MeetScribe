@@ -20,8 +20,10 @@ DEFAULTS = {
     "speaker_names": {},
     "auto_transcribe": True,
     "auto_open_result": True,
-    "auto_correction": False,
-    "auto_summary": True,
+    # AI 摘要/纠错开关：统一用 UI 下拉框的字符串值（设置页写入、转写调度读取均以此为准）。
+    # 转写调度 _process_message 对历史布尔值仍做兼容（见 transcription.py）。
+    "auto_correction": "关闭",
+    "auto_summary": "转写后自动生成",
     "asr_engine": "SenseVoice",
     "recording_mode": "dual",
     "use_vb_cable": False,
