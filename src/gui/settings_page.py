@@ -144,9 +144,13 @@ class SettingsPage(QWidget):
         self._rec_dir_entry = self._create_path_row(
             group, "录音保存目录",
             self._config.get("recording_dir", "") if self._config else "")
+        # 转写输出目录：权威键为 transcript_dir（与 _on_save 写入及
+        # app.get_output_dir() 读取一致）。回退 output_dir 仅为兼容旧配置。
+        out_dir_default = ""
+        if self._config:
+            out_dir_default = self._config.get("transcript_dir", "") or self._config.get("output_dir", "")
         self._out_dir_entry = self._create_path_row(
-            group, "转写输出目录",
-            self._config.get("output_dir", "") if self._config else "")
+            group, "转写输出目录", out_dir_default)
 
     def _build_engine_section(self, layout):
         """转写引擎设置（含四项引擎参数）"""
