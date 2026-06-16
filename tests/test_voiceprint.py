@@ -275,8 +275,9 @@ def test_extract_embedding_from_file():
         os.remove(temp_path)
 
 
+@pytest.mark.e2e_heavy
 def test_extract_embedding_from_file_success():
-    """测试从音频文件提取声纹成功场景"""
+    """测试从音频文件提取声纹成功场景（patch funasr.AutoModel，需 funasr 已安装）"""
     from voiceprint import VoiceprintLibrary
     from unittest.mock import patch, MagicMock
     import tempfile
@@ -320,8 +321,9 @@ def test_extract_embedding_from_file_not_found():
     assert result is None
 
 
+@pytest.mark.e2e_heavy
 def test_extract_embedding_from_file_transcribe_error():
-    """测试提取失败时返回 None"""
+    """测试提取失败时返回 None（patch funasr.AutoModel，需 funasr 已安装）"""
     from voiceprint import VoiceprintLibrary
     from unittest.mock import patch, MagicMock
     import tempfile
@@ -352,8 +354,9 @@ def test_extract_embedding_from_file_transcribe_error():
         os.remove(temp_path)
 
 
+@pytest.mark.e2e_heavy
 def test_extract_embedding_from_file_return_format():
-    """测试返回值格式为 {spk_id: embedding_vector}"""
+    """测试返回值格式为 {spk_id: embedding_vector}（patch funasr.AutoModel，需 funasr）"""
     from voiceprint import VoiceprintLibrary
     from unittest.mock import patch, MagicMock
     import tempfile

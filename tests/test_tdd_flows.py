@@ -198,18 +198,16 @@ class TestRecordingFlow:
         logger.info("PASS: Recording start/stop flow OK")
         test_app.close()
 
-    def test_file_appears_after_recording(self, qtbot):
-        """录音保存后文件应出现在文件列表"""
+    def test_file_appears_after_recording(self, qtbot, synthetic_wav):
+        """录音保存后文件应出现在文件列表（用合成 WAV，不依赖大音频 fixture）"""
         from gui.app import MeetScribeApp
         from file_manager import FileStatus
         test_app = MeetScribeApp()
         qtbot.addWidget(test_app)
         test_app.show()
 
-        # 创建一个测试音频文件
-        test_dir = tempfile.mkdtemp()
-        test_file = os.path.join(test_dir, "test_record.wav")
-        shutil.copy(TEST_AUDIO_SHORT, test_file)
+        # 用 conftest 的 synthetic_wav 工厂生成一个合法 16kHz 单声道 WAV
+        test_file = synthetic_wav("test_record.wav", seconds=1.0)
 
         try:
             # Mock 阻塞性弹窗（ask_transcribe_after_record 中的 QMessageBox）
@@ -223,10 +221,6 @@ class TestRecordingFlow:
             assert file_item is not None, f"File {test_file} not found in FileManager"
             logger.info(f"PASS: File appears after recording: {file_item.file_name}")
         finally:
-            # 清理
-            if os.path.exists(test_file):
-                os.remove(test_file)
-            os.rmdir(test_dir)
             test_app.close()
 
 
@@ -234,8 +228,9 @@ class TestRecordingFlow:
 #  L3: 真实音频转写（16 分钟会议）
 # ══════════════════════════════════════════════════════════
 
+@pytest.mark.e2e_heavy
 class TestTranscriptionWithRealAudio:
-    """使用真实 16 分钟会议录音验证转写全流程"""
+    """使用真实 16 分钟会议录音验证转写全流程（需 funasr + 模型 + 真实音频 fixtures）"""
 
     def test_audio_files_valid(self):
         """验证两个测试音频文件都有效"""
@@ -375,13 +370,19 @@ class TestTranscriptionWithRealAudio:
 #  L4: AI 摘要生成（真实 API）
 # ══════════════════════════════════════════════════════════
 
+def _test_api_key():
+    """从环境变量读取测试用 API Key（不再硬编码到仓库）。"""
+    return os.environ.get("MEETSCRIBE_TEST_API_KEY", "")
+
+
+@pytest.mark.e2e_network
 class TestAISummary:
-    """AI 摘要功能验证（使用内测 API Key）"""
+    """AI 摘要功能验证（真实 API 调用，需 MEETSCRIBE_TEST_API_KEY 环境变量）"""
 
     def test_ai_service_creation(self):
         """验证 AIService 可创建"""
         from ai_service import AIService
-        api_key = "sk-c4wihuvmfe4fv7qurdhk975rinuxflgi056dphuvv25x8lbm"
+        api_key = _test_api_key()
         ai = AIService(
             vendor="小米 MiMo",
             model="mimo-v2.5",
@@ -396,7 +397,7 @@ class TestAISummary:
     def test_ai_summary_generation(self):
         """验证 AI 摘要生成（真实 API 调用）"""
         from ai_service import AIService
-        api_key = "sk-c4wihuvmfe4fv7qurdhk975rinuxflgi056dphuvv25x8lbm"
+        api_key = _test_api_key()
         ai = AIService(
             vendor="小米 MiMo",
             model="mimo-v2.5",
@@ -440,6 +441,7 @@ class TestAISummary:
             logger.error(traceback.format_exc())
             pytest.fail(f"AI summary generation failed: {e}")
 
+    @pytest.mark.e2e_network
     @pytest.mark.timeout(600)
     def test_ai_summary_after_transcription(self, transcription_app, qtbot):
         """转写完成后自动触发 AI 摘要"""
@@ -498,8 +500,9 @@ class TestAISummary:
 class TestVoiceprintMatching:
     """声纹匹配逻辑验证"""
 
+    @pytest.mark.e2e_heavy
     def test_voiceprint_library_loads(self):
-        """音色库可正常加载"""
+        """音色库可正常加载（依赖磁盘上已有的声纹库数据）"""
         from voiceprint import VoiceprintLibrary
         library = VoiceprintLibrary()
         speakers = library.get_speakers()
@@ -793,8 +796,9 @@ class TestSettingsPersistence:
 class TestBusinessLogic:
     """业务逻辑正确性验证（不只是不报错）"""
 
+    @pytest.mark.e2e_heavy
     def test_speaker_count_reasonable(self):
-        """说话人数量合理性验证"""
+        """说话人数量合理性验证（依赖磁盘上已有的声纹库数据）"""
         from voiceprint import VoiceprintLibrary
         library = VoiceprintLibrary()
         speakers = library.get_speakers()
