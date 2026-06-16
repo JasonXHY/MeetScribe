@@ -234,7 +234,16 @@ class FileListView(QWidget):
             "size": file_info.get("size", ""),
             "status": file_info.get("status", "pending"),
             "queue_pos": file_info.get("queue_pos"),
+            "merged": bool(file_info.get("merged")),
         }
+
+    @staticmethod
+    def _display_name(file_info: dict) -> str:
+        """合并组文件（merged=True）名称加 📎 前缀，使双轨/合并文件视觉归组（FILE-006）。"""
+        name = file_info.get("name", "")
+        if file_info.get("merged"):
+            return f"📎 {name}"
+        return name
 
     def _apply_incremental(self, files: list):
         """以 file_path 为主键，将表格增量更新为 files。"""
@@ -289,7 +298,7 @@ class FileListView(QWidget):
         # 文件名
         name_item = self._table.item(row, 1)
         if name_item is not None:
-            name_item.setText(file_info.get("name", ""))
+            name_item.setText(self._display_name(file_info))
             name_item.setToolTip(file_info.get("path", ""))
 
         # 主题
@@ -329,8 +338,8 @@ class FileListView(QWidget):
             queue_item.setText("")
         self._table.setItem(row, 0, queue_item)
 
-        # 文件名（带蓝色圆点）
-        name = file_info.get("name", "")
+        # 文件名（带蓝色圆点；合并组加 📎 前缀）
+        name = self._display_name(file_info)
         name_item = QTableWidgetItem(name)
         name_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         name_item.setToolTip(file_info.get("path", ""))

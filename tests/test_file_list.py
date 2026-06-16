@@ -186,3 +186,33 @@ class TestFileListIncrementalUpdate:
         for path in ("/a.wav", "/c.wav"):
             assert after[path]["status_item"] is before[path]["status_item"]
             assert after[path]["action_widget"] is before[path]["action_widget"]
+
+
+@pytest.mark.gui
+@pytest.mark.integration
+class TestMergedGroupBadge:
+    """FILE-006 合并组 📎 显示"""
+
+    def test_merged_group_shows_badge(self, qtbot):
+        """属于合并组（merged=True）的行名称带 📎 前缀，普通行不带。
+
+        徽标须在创建行与就地更新行两种路径下都生效（兼容 G7 增量更新）。
+        """
+        from gui.file_list_view import FileListView
+        view = FileListView()
+        qtbot.addWidget(view)
+
+        normal = _make_file("/normal.wav", name="normal.wav")
+        merged = _make_file("/merged.wav", name="dual-track")
+        merged["merged"] = True
+
+        # 创建行路径
+        view.refresh([normal, merged])
+        assert "📎" not in view._table.item(0, 1).text(), "普通行不应带 📎"
+        assert "📎" in view._table.item(1, 1).text(), "合并组行应带 📎"
+
+        # 就地更新路径：普通行变为合并组行（路径不变，仅 merged 变化）
+        normal2 = _make_file("/normal.wav", name="normal.wav")
+        normal2["merged"] = True
+        view.refresh([normal2, merged])
+        assert "📎" in view._table.item(0, 1).text(), "就地更新为合并组后应带 📎"

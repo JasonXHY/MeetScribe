@@ -206,16 +206,43 @@ class FileManager:
         except Exception as e:
             logger.warning(f"异步获取时长失败: {e}")
 
-    def remove_file(self, file_path):
-        """从列表移除文件"""
+    def remove_file(self, file_path, delete_source=False):
+        """从列表移除文件（FILE-002）。
+
+        Args:
+            file_path: 要移除的文件路径。
+            delete_source: 为 True 时同时删除磁盘上的源文件。
+                源文件不存在或被占用时记录日志并继续，
+                列表项仍会被移除（不抛异常）。
+
+        Returns:
+            AudioFile: 被移除的条目；未找到时返回 None。
+        """
         for i, f in enumerate(self._files):
             if f.file_path == file_path:
                 removed = self._files.pop(i)
+                if delete_source:
+                    self._delete_source_file(removed)
                 self._notify("removed", removed)
                 self._save_to_file()
                 logger.info(f"File removed: {removed.file_name}")
                 return removed
         return None
+
+    def _delete_source_file(self, item):
+        """删除条目对应的磁盘源文件（含合并组的所有源文件），带异常保护。"""
+        # 合并行：删除其所有源文件；普通行：删除自身路径
+        paths = list(item.source_files) if item.source_files else [item.file_path]
+        for path in paths:
+            try:
+                if path and os.path.exists(path):
+                    os.remove(path)
+                    logger.info(f"Source file deleted: {path}")
+                else:
+                    logger.warning(f"Source file not found, skip delete: {path}")
+            except OSError as e:
+                # 文件被占用/权限不足等：记录并继续，不影响列表项移除
+                logger.warning(f"Failed to delete source file {path}: {e}")
 
     def get_file(self, file_path):
         """获取文件条目"""
