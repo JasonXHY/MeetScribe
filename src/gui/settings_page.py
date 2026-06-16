@@ -212,7 +212,7 @@ class SettingsPage(QWidget):
                 border-color: {C_ACCENT};
             }}
         """)
-        api_key = self._config.get("mimo_api_key", "") if self._config else ""
+        api_key = self._config.get("ai_user_api_key", "") if self._config else ""
         self._api_key_entry.setText(api_key)
         self._api_key_toggle = QPushButton()
         self._api_key_toggle.setFixedSize(32, 32)
@@ -726,8 +726,8 @@ class SettingsPage(QWidget):
         if hasattr(self, '_model_combo'):
             self._config.set("ai_model", self._model_combo.currentText())
         if hasattr(self, '_api_key_entry'):
-            self._config.set("ai_api_key", self._api_key_entry.text().strip())
-            self._config.set("mimo_api_key", self._api_key_entry.text().strip())
+            key_text = self._api_key_entry.text().strip()
+            self._config.set("ai_user_api_key", key_text)
         if hasattr(self, '_access_mode_combo'):
             self._config.set("ai_access_mode", self._access_mode_combo.currentText())
         if hasattr(self, '_ollama_combo'):

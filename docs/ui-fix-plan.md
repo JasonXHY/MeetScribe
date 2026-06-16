@@ -1717,4 +1717,548 @@ save_btn.setStyleSheet(f"""
 | FIX-B2 | settings_page.py | 333 | `setFixedSize(120, 36)` | `setFixedSize(150, 40)` + 显式 padding/min-height |
 | FIX-B3 | settings_page.py | 119 | `setFixedSize(148, 40)` | `setFixedSize(160, 44)` + 显式 padding/min-height + 去掉 cssClass="save" |
 
+---
+
+## 十六、六次审查——音色库页面布局问题（2026-06-15）
+
+> 用户反馈音色库管理页面存在两个明显问题：左侧说话人列表过于拥挤，右侧声纹样本居中排列而非顶端对齐。
+
+---
+
+### 问题 A：左侧说话人列表项过于拥挤
+
+**截图表现**：说话人列表中 6 个条目紧贴在一起，行与行之间几乎没有可见间距，视觉上非常拥挤。
+
+**原型图规格**：`mockup-voiceprint.html` 第 46 行 `.speaker-item` 定义了 `padding: 10px 12px`，每个 item 高度约 52px（32px 头像 + 10px 上下 padding + 上下各约 5px 文字空间）。
+
+#### 根因分析
+
+`voiceprint_page.py` 使用 `QListWidget` + 自定义 `item_widget` 的方式显示说话人。问题有两层：
+
+1. **`item_widget` 的 `sizeHint()` 未正确反映实际需要的高度**。第 537-538 行：
+   ```python
+   item_widget = QWidget()
+   item_layout = QHBoxLayout(item_widget)
+   item_layout.setContentsMargins(10, 8, 10, 8)
+   ```
+   QWidget 的 `sizeHint()` 基于子控件计算，但在 `QListWidget.setItemWidget()` 调用时可能尚未完成布局计算，导致返回的高度偏小。
+
+2. **QSS `padding` 和 widget `margins` 叠加计算**。QListWidget 的 QSS（第 432-436 行）已设置 `padding: 10px 12px`，加上 item_widget 的 `contentsMargins(10, 8, 10, 8)`，理论上每个 item 应有 10+8=18px 的上下内边距。但如果 `sizeHint()` 没有包含 QSS padding，Qt 只使用 widget 自身的尺寸，忽略 QSS 添加的额外空间。
+
+#### 修复方案
+
+**方案 A（推荐）**：显式设置 item 的 `sizeHint`，确保每个 item 有足够高度。
+
+```python
+# voiceprint_page.py 第 565-569 行
+# 改前
+list_item = QListWidgetItem()
+list_item.setSizeHint(item_widget.sizeHint())
+list_item.setData(Qt.UserRole, name)
+self._speaker_list.addItem(list_item)
+self._speaker_list.setItemWidget(list_item, item_widget)
+
+# 改后 — 显式设置最小高度
+list_item = QListWidgetItem()
+list_item.setSizeHint(QSize(0, 52))  # 高度固定 52px（匹配原型图）
+list_item.setData(Qt.UserRole, name)
+self._speaker_list.addItem(list_item)
+self._speaker_list.setItemWidget(list_item, item_widget)
+```
+
+同时在文件顶部 import 中添加 `QSize`：
+
+```python
+# voiceprint_page.py 第 14-18 行
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QFrame, QScrollArea, QLineEdit, QMessageBox, QInputDialog,
+    QDialog, QSplitter, QListWidget, QListWidgetItem, QGroupBox
+)
+from PySide6.QtCore import Qt, Signal, QTimer, QThread, QSize  # ← 添加 QSize
+```
+
+**方案 B（补充）**：增加 item_widget 的内边距。
+
+```python
+# voiceprint_page.py 第 538 行
+# 改前
+item_layout.setContentsMargins(10, 8, 10, 8)
+
+# 改后 — 增加上下边距
+item_layout.setContentsMargins(10, 10, 10, 10)
+```
+
+两个方案可同时使用。`setSizeHint(QSize(0, 52))` 确保高度下限，增加 margins 提供自然间距。
+
+---
+
+### 问题 B：右侧声纹样本垂直居中而非顶端对齐
+
+**截图表现**：「声纹样本」卡片占满了右侧详情面板的大量垂直空间，样本行（样本 1、样本 2）在卡片中垂直居中显示，卡片上半部和下半部都是空白灰色背景。
+
+**原型图规格**：`mockup-voiceprint.html` 第 71-73 行，`.sample-card` 是一个紧凑的卡片，样本行紧贴卡片顶部，卡片高度仅包裹内容，不会扩展到填满可用空间。
+
+#### 根因分析
+
+`voiceprint_page.py` 第 727 行：
+
+```python
+self._detail_layout.addWidget(samples_card, 1)
+```
+
+第二个参数 `1` 是 **stretch factor**。在 QVBoxLayout 中，`stretch=1` 使 `samples_card` 扩展到填满布局中所有剩余空间。由于 `_detail_widget` 被放入 QScrollArea（第 478-490 行），ScrollArea 会把全部可用高度分配给 `_detail_widget`，导致 `samples_card` 被拉伸到极高的高度。
+
+样本行通过 `QHBoxLayout` 添加到 `samples_layout`（VBox），每行的默认对齐是顶端对齐，但由于 card 本身被拉伸到远超内容高度，视觉上看起来就像居中了一样。
+
+#### 修复方案
+
+**去掉 stretch factor，改用 `addStretch()` 将剩余空间推到底部。**
+
+```python
+# voiceprint_page.py 第 727 行
+# 改前
+self._detail_layout.addWidget(samples_card, 1)
+
+# 改后 — 去掉 stretch factor，让 card 保持自然高度
+self._detail_layout.addWidget(samples_card)
+```
+
+第 728 行的 `self._detail_layout.addStretch()` 已经存在，它会吸收所有剩余空间，将内容推到顶部。所以只需去掉 `addWidget` 的 stretch 参数即可。
+
+---
+
+### 修改汇总（六次审查——音色库布局）
+
+| 编号 | 修改 | 文件 | 行号 | 改前 | 改后 |
+|------|------|------|------|------|------|
+| FIX-V1 | 说话人列表项高度 | voiceprint_page.py | 566 | `setSizeHint(item_widget.sizeHint())` | `setSizeHint(QSize(0, 52))` |
+| FIX-V2 | 添加 QSize import | voiceprint_page.py | 19 | `from PySide6.QtCore import Qt, Signal, QTimer, QThread` | `from PySide6.QtCore import Qt, Signal, QTimer, QThread, QSize` |
+| FIX-V3 | item_widget 上下边距 | voiceprint_page.py | 538 | `setContentsMargins(10, 8, 10, 8)` | `setContentsMargins(10, 10, 10, 10)` |
+| FIX-V4 | 样本卡片去掉 stretch | voiceprint_page.py | 727 | `addWidget(samples_card, 1)` | `addWidget(samples_card)` |
+| FIX-V5 | 添加 C_WARN import | voiceprint_page.py | 23 | import 列表中缺少 `C_WARN` | 在 import 中添加 `C_WARN`（第 712 行使用但未导入，运行时会 NameError） |
+
+**优先级**：FIX-V4 影响最大（右侧大面积空白问题），FIX-V1 影响次大（左侧拥挤问题）。FIX-V5 是潜在 NameError，需一并修复。
+
 关键点：每个按钮的 inline QSS 必须显式设置 `padding` 和 `min-height`，防止全局 QPushButton 样式的级联覆盖。宽度也适当增加，让按钮在卡片中有更协调的视觉比例。
+
+---
+
+## 十七、七次审查——说话人列表 UI 残留问题（2026-06-16）
+
+> 六次审查的 FIX-V1 ~ FIX-V5 已全部实施（sizeHint、margins、stretch、import），但截图显示说话人列表仍存在可见的 UI 问题。
+
+---
+
+### 问题 1（P0）：选中项无视觉高亮
+
+**截图表现**：右侧详情面板显示"刘家诚"的详细信息（样本数、创建时间、声纹样本），说明该说话人已被选中，但左侧列表中所有 6 个条目外观一致，看不出哪个被选中。
+
+**原型图规格**：`mockup-voiceprint.html` 第 48 行 `.speaker-item.selected { background: #EFF6FF; }` — 选中项应有浅蓝背景。
+
+#### 根因分析
+
+`voiceprint_page.py` 使用 `QListWidget` + `setItemWidget()` 的自定义 widget 模式。QListWidget 的 QSS（第 438-440 行）设置了：
+
+```python
+QListWidget::item:selected {{
+    background-color: {C_ACCENT_LT}; color: {C_TXT1};
+}}
+```
+
+`C_ACCENT_LT = "#EFF6FF"`，理论上选中项应该有浅蓝背景。但在 Windows 上，**当 QListWidget 使用 `setItemWidget()` 放置自定义 QWidget 时，`::item:selected` 的 background-color 绘制在 item 底层，而自定义 widget 覆盖在上层**。如果自定义 widget 的子控件布局填满了整个 item 区域，即使 widget 本身是 `background: transparent`，Qt 的绘制顺序也可能导致选中色被遮挡或不可见。
+
+这是 PySide6/Qt 在 Windows 平台上的已知行为：`setItemWidget()` 的自定义 widget 与 QListWidget 的 `::item` 伪状态样式之间存在层叠冲突。
+
+#### 修复方案
+
+**创建 `SpeakerItemWidget` 自定义类，自行管理选中/hover 背景色。**
+
+```python
+# voiceprint_page.py — 在 VoiceprintPage 类之前新增
+
+class SpeakerItemWidget(QWidget):
+    """说话人列表项自定义 widget，自行管理选中/hover 背景色"""
+
+    def __init__(self, name, sample_count, color, parent=None):
+        super().__init__(parent)
+        self._selected = False
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        # 彩色圆形头像
+        avatar = QLabel(name[0] if name else "?")
+        avatar.setFixedSize(32, 32)
+        avatar.setAlignment(Qt.AlignCenter)
+        avatar.setStyleSheet(f"""
+            background-color: {color};
+            color: white; border-radius: 16px;
+            font-size: 13px; font-weight: bold;
+        """)
+        layout.addWidget(avatar)
+
+        # 名字 + 样本数
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(1)
+        name_lbl = QLabel(name)
+        name_lbl.setStyleSheet(f"color: {C_TXT1}; font-size: 13px; font-weight: 500; background: transparent; border: none;")
+        info_layout.addWidget(name_lbl)
+        meta_lbl = QLabel(f"{sample_count} 个样本")
+        meta_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
+        info_layout.addWidget(meta_lbl)
+        layout.addLayout(info_layout)
+        layout.addStretch()
+
+        self._apply_style()
+
+    def set_selected(self, selected):
+        if self._selected != selected:
+            self._selected = selected
+            self._apply_style()
+
+    def _apply_style(self):
+        if self._selected:
+            self.setStyleSheet(f"""
+                SpeakerItemWidget {{
+                    background-color: {C_ACCENT_LT};
+                    border-radius: 6px;
+                }}
+            """)
+        else:
+            self.setStyleSheet("""
+                SpeakerItemWidget {
+                    background-color: transparent;
+                    border-radius: 6px;
+                }
+            """)
+```
+
+**在 `_on_speaker_select` 中更新选中状态：**
+
+```python
+# voiceprint_page.py — 修改 _on_speaker_select 方法
+
+def _on_speaker_select(self, current, previous):
+    """选中说话人"""
+    # 更新 widget 高亮
+    if previous:
+        prev_widget = self._speaker_list.itemWidget(previous)
+        if prev_widget and hasattr(prev_widget, 'set_selected'):
+            prev_widget.set_selected(False)
+    if current:
+        curr_widget = self._speaker_list.itemWidget(current)
+        if curr_widget and hasattr(curr_widget, 'set_selected'):
+            curr_widget.set_selected(True)
+        name = current.data(Qt.UserRole)
+        self._selected_speaker = name
+        self._show_speaker_detail(name)
+```
+
+**在 `refresh_list` 中使用 `SpeakerItemWidget`：**
+
+```python
+# voiceprint_page.py — 修改 refresh_list 中的 item 创建部分（约第 534-569 行）
+
+for name, profile in speakers.items():
+    color_idx = hash(name) % len(SPEAKER_COLORS)
+    color = SPEAKER_COLORS[color_idx]
+    sample_count = len(profile.embeddings)
+
+    item_widget = SpeakerItemWidget(name, sample_count, color)
+
+    list_item = QListWidgetItem()
+    list_item.setSizeHint(QSize(0, 52))
+    list_item.setData(Qt.UserRole, name)
+    self._speaker_list.addItem(list_item)
+    self._speaker_list.setItemWidget(list_item, item_widget)
+```
+
+---
+
+### 问题 2（P1）：列表项 hover 无反馈
+
+**截图表现**：鼠标悬停在说话人条目上时无任何视觉变化。
+
+**原型图规格**：`.speaker-item:hover { background: #F9FAFB; }` — 悬停时应有浅灰背景。
+
+#### 根因分析
+
+与问题 1 同源。QListWidget 的 `::item:hover` QSS 被自定义 widget 遮挡。
+
+#### 修复方案
+
+在 `SpeakerItemWidget` 中重写 `enterEvent` / `leaveEvent`：
+
+```python
+def enterEvent(self, event):
+    if not self._selected:
+        self.setStyleSheet(f"""
+            SpeakerItemWidget {{
+                background-color: #F9FAFB;
+                border-radius: 6px;
+            }}
+        """)
+    super().enterEvent(event)
+
+def leaveEvent(self, event):
+    if not self._selected:
+        self._apply_style()
+    super().leaveEvent(event)
+```
+
+---
+
+### 问题 3（P1）：列表项间距偏紧
+
+**截图表现**：6 个说话人条目紧贴在一起，行间缺少可见分隔，视觉上显得拥挤。
+
+**原型图规格**：`.speaker-item` 有 `margin-bottom: 2px`，加上 `padding: 10px 12px`，每个 item 的总占用高度约 54-56px。
+
+#### 根因分析
+
+当前 `setSizeHint(QSize(0, 52))` 设定了 52px 高度，`setContentsMargins(10, 10, 10, 10)` 在 32px 头像上下各 10px。但 QListWidget 的 `::item` CSS 设置了 `margin: 0 4px 2px 4px`，这个 margin 在使用 `setItemWidget()` 时可能不完全生效，导致行间只有 2px 间距。
+
+#### 修复方案
+
+**增加 item 高度到 56px，并在 QListWidget CSS 中明确 item 间距：**
+
+```python
+# 修改 sizeHint
+list_item.setSizeHint(QSize(0, 56))  # 从 52 增加到 56
+```
+
+```python
+# 修改 QListWidget 样式（第 426-444 行），增加 item 间距和去除默认 outline
+self._speaker_list.setStyleSheet(f"""
+    QListWidget {{
+        background: transparent; border: none;
+        font-family: {FONT_FAMILY}; font-size: 12px;
+        outline: none;
+    }}
+    QListWidget::item {{
+        padding: 0px;
+        border-radius: 6px;
+        margin: 1px 4px 1px 4px;
+        border: none;
+    }}
+    QListWidget::item:selected {{
+        background-color: transparent;
+        color: {C_TXT1};
+    }}
+    QListWidget::item:hover {{
+        background-color: transparent;
+    }}
+""")
+```
+
+注意 `::item:selected` 和 `::item:hover` 都设为 `transparent`，因为背景色现在由 `SpeakerItemWidget` 自行管理，不再依赖 QListWidget 的 QSS。这样也彻底避免了 Qt 层叠冲突。
+
+---
+
+### 问题 4（P2）：选中项缺少左侧色条指示
+
+**原型图对比**：很多成熟的列表 UI 在选中项左侧有一条 3px 的蓝色指示条，帮助用户快速定位当前选中项。当前实现无任何此类指示。
+
+#### 修复方案
+
+在 `SpeakerItemWidget._apply_style()` 中为选中态添加左边框：
+
+```python
+def _apply_style(self):
+    if self._selected:
+        self.setStyleSheet(f"""
+            SpeakerItemWidget {{
+                background-color: {C_ACCENT_LT};
+                border-radius: 6px;
+                border-left: 3px solid {C_ACCENT};
+            }}
+        """)
+    else:
+        self.setStyleSheet("""
+            SpeakerItemWidget {
+                background-color: transparent;
+                border-radius: 6px;
+                border-left: 3px solid transparent;
+            }
+        """)
+```
+
+---
+
+### 修改汇总（七次审查——说话人列表 UI）
+
+| 编号 | 修改 | 文件 | 影响范围 | 说明 |
+|------|------|------|----------|------|
+| FIX-V6 | 新增 `SpeakerItemWidget` 类 | voiceprint_page.py | 新增约 50 行 | 自定义 widget 自管理选中/hover 背景色 |
+| FIX-V7 | `refresh_list()` 使用 `SpeakerItemWidget` | voiceprint_page.py | 第 534-569 行 | 替换原有的 inline widget 创建逻辑 |
+| FIX-V8 | `_on_speaker_select()` 更新高亮 | voiceprint_page.py | 第 586-591 行 | 在选中切换时调用 `set_selected()` |
+| FIX-V9 | QListWidget CSS 改为 transparent | voiceprint_page.py | 第 426-444 行 | `::item:selected` 和 `::item:hover` 都设为 transparent，避免层叠冲突 |
+| FIX-V10 | item 高度增加到 56px | voiceprint_page.py | 第 566 行 | `setSizeHint(QSize(0, 56))` |
+| FIX-V11 | 选中项左侧蓝色指示条 | voiceprint_page.py | SpeakerItemWidget 内 | `border-left: 3px solid {C_ACCENT}` |
+
+**优先级**：FIX-V6/V7/V8 是核心修复（选中高亮），FIX-V9 是配套修改（避免冲突），FIX-V10/V11 是体验优化。建议全部一次性实施。
+
+---
+
+## 十八、八次审查——发言人管理对话框尺寸与按钮问题（2026-06-16）
+
+> 转写完成后点击"发言人管理"打开的 `SpeakerDialog`（`src/gui/dialogs.py`）存在多个尺寸设计不合理的问题：对话框太小看不清字，"接受"按钮文字不可见，"保存到音色库"按钮文字被截断。
+
+---
+
+### 问题 1（P0）："接受"按钮文字不可见
+
+**截图表现**：每个说话人行的音色库匹配建议区域，"接受"按钮显示为蓝色小方块，无论窗口拉多大都看不到"接受"二字。
+
+**位置**：`src/gui/dialogs.py` 第 611-615 行
+
+#### 根因分析
+
+```python
+accept_btn = QPushButton("接受")
+accept_btn.setFixedSize(40, 20)
+accept_btn.setStyleSheet(f"""
+    QPushButton {{ background-color: {C_ACCENT}; color: white;
+        border: none; border-radius: 3px; font-size: 10px; }}
+""")
+```
+
+按钮固定尺寸 40×20 像素，字号 10px。两个中文字符"接受"在 10px 字号下约需 20-24px 宽度，加上 Qt 按钮的默认内边距（约 8-12px），实际需要约 36-40px。加上 20px 的高度对于 10px 字号也过于紧凑。在 Windows DPI 缩放下（如 125%/150%），可用空间进一步缩小，导致文字完全被裁剪。
+
+#### 修复方案
+
+```python
+accept_btn = QPushButton("接受")
+accept_btn.setFixedSize(56, 26)  # 从 40×20 增加到 56×26
+accept_btn.setStyleSheet(f"""
+    QPushButton {{ background-color: {C_ACCENT}; color: white;
+        border: none; border-radius: 4px; font-size: 12px;
+        padding: 2px 8px; }}
+""")
+```
+
+---
+
+### 问题 2（P0）：对话框初始尺寸太小
+
+**截图表现**：整个对话框内容拥挤，每行元素被压缩，文字偏小，阅读困难。
+
+**位置**：`src/gui/dialogs.py` 第 320 行
+
+#### 根因分析
+
+```python
+self.setMinimumSize(540, 600)
+```
+
+每个说话人行包含：色标(12px) + 标签(80px) + 姓名输入框(stretch) + 匹配建议(~140px) + 接受按钮 + 音色库下拉框(140px) + 百分比(50px) + 保存按钮(100px)。加上 spacing(6px × 7) = 42px。这些元素最小宽度合计约 570px+，而对话框只有 540px 且还有 32px 的左右边距（16px × 2），内容区域实际只有 508px，远不够。
+
+#### 修复方案
+
+```python
+self.setMinimumSize(800, 560)  # 宽度从 540 增加到 800，高度微调
+self.resize(880, 600)           # 初始打开时使用更大的尺寸
+```
+
+同时增加布局边距和间距：
+
+```python
+layout.setContentsMargins(20, 20, 20, 20)  # 从 16 增加到 20
+layout.setSpacing(14)                        # 从 12 增加到 14
+```
+
+---
+
+### 问题 3（P1）："保存到音色库"按钮文字被截断
+
+**截图表现**：每行最右侧的按钮显示"保存到…"，文字被截断，看不到完整内容。
+
+**位置**：`src/gui/dialogs.py` 第 508-509 行
+
+#### 根因分析
+
+```python
+save_btn = QPushButton("保存到音色库")
+save_btn.setFixedSize(100, 28)
+```
+
+"保存到音色库"6 个中文字符在 11px 字号下约需 66px 宽度，加上 Qt 默认内边距约 16px，总计约 82px。但在 Windows 高 DPI 下或全局样式增加了额外 padding 时，100px 可能不够。
+
+#### 修复方案
+
+```python
+save_btn = QPushButton("保存到音色库")
+save_btn.setFixedSize(120, 28)  # 宽度从 100 增加到 120
+save_btn.setStyleSheet(f"""
+    QPushButton {{ background-color: {C_ACCENT}; color: white;
+        border: none; border-radius: 4px; font-size: 12px;  # 字号从 11 增加到 12
+        padding: 4px 12px; }}
+""")
+```
+
+---
+
+### 问题 4（P1）：每行元素间距过紧
+
+**截图表现**：每行中的色标、标签、输入框、建议文字、按钮紧贴在一起，缺乏呼吸空间。
+
+**位置**：`src/gui/dialogs.py` 第 455 行
+
+#### 根因分析
+
+```python
+row = QHBoxLayout()
+row.setSpacing(6)
+```
+
+一行内有 7-8 个元素，6px 间距导致元素之间几乎没有视觉间隔。
+
+#### 修复方案
+
+```python
+row = QHBoxLayout()
+row.setSpacing(10)  # 从 6 增加到 10
+```
+
+---
+
+### 问题 5（P2）：音色库下拉框宽度不足
+
+**位置**：`src/gui/dialogs.py` 第 485 行
+
+```python
+combo.setFixedWidth(140)
+```
+
+如果音色库中的说话人姓名较长（3-4 个中文字符），140px 在 11px 字号下可能不够显示完整姓名。
+
+#### 修复方案
+
+```python
+combo.setFixedWidth(150)
+combo.setStyleSheet(f"""
+    QComboBox {{
+        border: 1px solid {C_BORDER}; border-radius: 4px;
+        padding: 4px 8px; font-family: {FONT_FAMILY}; font-size: 12px;  # 字号从 11 增加到 12
+        background-color: {C_BG};
+    }}
+    ...
+""")
+```
+
+---
+
+### 修改汇总（八次审查——发言人管理对话框）
+
+| 编号 | 修改 | 文件 | 行号 | 改前 | 改后 |
+|------|------|------|------|------|------|
+| FIX-D1 | 对话框最小尺寸 | dialogs.py | 320 | `setMinimumSize(540, 600)` | `setMinimumSize(800, 560)` + `resize(880, 600)` |
+| FIX-D2 | 布局边距和间距 | dialogs.py | 337-338 | `setContentsMargins(16,16,16,16)` / `setSpacing(12)` | `setContentsMargins(20,20,20,20)` / `setSpacing(14)` |
+| FIX-D3 | "接受"按钮尺寸 | dialogs.py | 612 | `setFixedSize(40, 20)` + `font-size: 10px` | `setFixedSize(56, 26)` + `font-size: 12px` + `padding: 2px 8px` |
+| FIX-D4 | "保存到音色库"按钮 | dialogs.py | 509 | `setFixedSize(100, 28)` + `font-size: 11px` | `setFixedSize(120, 28)` + `font-size: 12px` + `padding: 4px 12px` |
+| FIX-D5 | 行内间距 | dialogs.py | 455 | `row.setSpacing(6)` | `row.setSpacing(10)` |
+| FIX-D6 | 音色库下拉框 | dialogs.py | 485-497 | `setFixedWidth(140)` + `font-size: 11px` | `setFixedWidth(150)` + `font-size: 12px` |
+
+**优先级**：FIX-D1/D3 是核心修复（对话框尺寸 + "接受"按钮），FIX-D4/D5 是配套优化，FIX-D2/D6 是体验提升。

@@ -18,13 +18,19 @@ def get_summary_path(transcript_path):
     if not transcript_path:
         return None
     result_dir = os.path.dirname(transcript_path)
-    base = os.path.basename(transcript_path)
-    # 先去掉扩展名，再去掉 "_transcript"
-    base_name = os.path.splitext(base)[0]
-    if "_transcript" in base_name:
-        base_name = base_name.replace("_transcript", "")
-    summary_path = os.path.join(result_dir, f"{base_name}_summary.md")
-    return summary_path if os.path.exists(summary_path) else None
+    base = os.path.splitext(os.path.basename(transcript_path))[0]
+    # 去掉 _transcript 后缀
+    if "_transcript" in base:
+        base = base.replace("_transcript", "")
+    # 尝试多种命名模式
+    candidates = [
+        os.path.join(result_dir, f"{base}_summary.md"),
+        os.path.join(result_dir, f"{base}_transcript_summary.md"),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return None
 
 
 def apply_speaker_mapping(transcript_path, mapping):

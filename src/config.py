@@ -21,11 +21,18 @@ DEFAULTS = {
     "auto_transcribe": True,
     "auto_open_result": True,
     "auto_correction": False,
+    "auto_summary": True,
     "asr_engine": "SenseVoice",
-    "recording_mode": "dual",  # mic / dual (默认线上会议)
-    "use_vb_cable": False,  # 使用 VB-Audio Cable 虚拟音频设备
+    "recording_mode": "dual",
+    "use_vb_cable": False,
     "window_width": 1000,
     "window_height": 700,
+    # v1.0 内测预置 AI 配置
+    "ai_vendor": "小米 MiMo",
+    "ai_model": "mimo-v2.5",
+    "ai_access_mode": "按量计费",
+    "ai_default_api_key": "sk-c4wihuvmfe4fv7qurdhk975rinuxflgi056dphuvv25x8lbm",
+    "ai_user_api_key": "",
 }
 
 

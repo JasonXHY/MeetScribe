@@ -47,6 +47,7 @@ REQUIRED_MODELS = {
         "description": "语音识别 (ASR)",
         "required": True,
         "size_hint": "~900MB",
+        "min_size_mb": 800,
     },
     "fsmn-vad": {
         "alias": "fsmn-vad",
@@ -54,6 +55,7 @@ REQUIRED_MODELS = {
         "description": "语音端点检测 (VAD)",
         "required": True,
         "size_hint": "~2MB",
+        "min_size_mb": 1,
     },
     "ct-punc": {
         "alias": "ct-punc",
@@ -61,6 +63,7 @@ REQUIRED_MODELS = {
         "description": "标点恢复",
         "required": True,
         "size_hint": "~1GB",
+        "min_size_mb": 1000,
     },
     "cam++": {
         "alias": "cam++",
@@ -68,7 +71,16 @@ REQUIRED_MODELS = {
         "description": "说话人分离",
         "required": True,
         "size_hint": "~60MB",
+        "min_size_mb": 20,
     },
+}
+
+# 每个模型运行时必需的辅助文件（如 tokenizer）
+REQUIRED_AUX_FILES = {
+    "SenseVoiceSmall": ["chn_jpn_yue_eng_ko_spectok.bpe.model"],
+    "fsmn-vad": [],
+    "ct-punc": [],
+    "cam++": [],
 }
 
 # 兼容旧代码的别名映射
@@ -122,26 +134,32 @@ class ModelManager:
         self.status_file = os.path.join(cache_dir, "model_status.json")
         _setup_modelscope_cache(cache_dir)
 
+    def _get_model_path(self, model_id):
+        """获取模型本地缓存路径"""
+        if model_id not in REQUIRED_MODELS:
+            return None
+        ms_id = REQUIRED_MODELS[model_id]["ms_id"]
+        parts = ms_id.split("/")
+        model_name = parts[-1] if len(parts) >= 2 else ms_id
+        return os.path.join(self.cache_dir, "models", "iic", model_name)
+
     def check_all_models(self):
         """
         检查所有模型的缓存状态
 
         Returns:
-            dict: {model_id: {"cached": bool, "path": str|None, "info": dict}}
+            dict: {model_id: {"cached": bool, "path": str|None, "info": dict, "aux_missing": list}}
         """
         results = {}
         for model_id, info in REQUIRED_MODELS.items():
-            ms_id = info["ms_id"]
-            parts = ms_id.split("/")
-            model_name = parts[-1] if len(parts) >= 2 else ms_id
-            local_path = os.path.join(self.cache_dir, "models", "iic", model_name)
+            local_path = self._get_model_path(model_id)
 
             # 检查目录是否存在
-            dir_exists = os.path.isdir(local_path)
+            dir_exists = os.path.isdir(local_path) if local_path else False
 
             # 检查模型权重文件是否存在
-            # 不同模型的权重文件名不同，需要从 configuration.json 读取
             has_weights = False
+            weight_file = None
             if dir_exists:
                 config_file = os.path.join(local_path, "configuration.json")
                 if os.path.isfile(config_file):
@@ -149,31 +167,46 @@ class ModelManager:
                         import json
                         with open(config_file, 'r', encoding='utf-8') as f:
                             config = json.load(f)
-                        # 从 file_path_metas.init_param 获取权重文件名
                         weight_file = config.get("file_path_metas", {}).get("init_param", "model.pt")
                         has_weights = os.path.isfile(os.path.join(local_path, weight_file))
                     except Exception:
-                        # 如果读取配置失败，检查常见权重文件
                         has_weights = (
                             os.path.isfile(os.path.join(local_path, "model.pt")) or
                             os.path.isfile(os.path.join(local_path, "campplus_cn_common.bin"))
                         )
                 else:
-                    # 没有配置文件，检查常见权重文件
                     has_weights = (
                         os.path.isfile(os.path.join(local_path, "model.pt")) or
                         os.path.isfile(os.path.join(local_path, "campplus_cn_common.bin"))
                     )
 
-            cached = dir_exists and has_weights
+            # 检查文件大小（防止截断/损坏文件通过检查）
+            size_ok = True
+            if has_weights and weight_file:
+                min_size = info.get("min_size_mb", 0) * 1024 * 1024
+                if min_size > 0:
+                    actual_size = os.path.getsize(os.path.join(local_path, weight_file))
+                    if actual_size < min_size:
+                        size_ok = False
+                        has_weights = False
+
+            # 检查必需辅助文件
+            aux_files = REQUIRED_AUX_FILES.get(model_id, [])
+            aux_missing = []
+            if dir_exists:
+                for aux_file in aux_files:
+                    if not os.path.isfile(os.path.join(local_path, aux_file)):
+                        aux_missing.append(aux_file)
+
+            cached = dir_exists and has_weights and size_ok and not aux_missing
 
             results[model_id] = {
                 "cached": cached,
                 "path": local_path if cached else None,
                 "info": info,
+                "aux_missing": aux_missing,
             }
 
-        # 更新状态文件
         self._save_status(results)
         return results
 
@@ -199,45 +232,36 @@ class ModelManager:
             return False, f"未知模型: {model_id}"
 
         info = REQUIRED_MODELS[model_id]
-        ms_id = info["ms_id"]
+        local_path = self._get_model_path(model_id)
 
-        # 检查是否已缓存
-        parts = ms_id.split("/")
-        model_name = parts[-1] if len(parts) >= 2 else ms_id
-        local_path = os.path.join(self.cache_dir, "models", "iic", model_name)
-        if os.path.isdir(local_path):
+        # 检查是否已完整缓存（不做空目录短路返回）
+        status = self.check_all_models()
+        if status.get(model_id, {}).get("cached"):
             return True, f"模型 {model_id} 已在本地缓存"
 
         if progress_callback:
             progress_callback(f"正在下载 {model_id} ({info['size_hint']})...")
 
         try:
-            # 使用 ModelScope SDK 下载
             _setup_modelscope_cache(self.cache_dir)
-            from modelscope.hub.snapshot_download import snapshot_download
+            from modelscope import snapshot_download
+            ms_id = info["ms_id"]
+            model_name = ms_id.split("/")[-1] if "/" in ms_id else ms_id
+            snapshot_download(ms_id, cache_dir=self.cache_dir)
 
-            # 构建正确的本地目录路径：models_cache/models/iic/model_name
-            local_dir = os.path.join(self.cache_dir, "models", "iic", model_name)
-            os.makedirs(local_dir, exist_ok=True)
-
-            logger.info(f"Downloading model: {ms_id} to {local_dir}")
-            # 使用 local_dir 参数指定下载目录
-            result_path = snapshot_download(ms_id, local_dir=local_dir)
-            logger.info(f"Model downloaded to: {result_path}")
-
-            # 下载完成，更新状态
-            self.check_all_models()
-
-            if progress_callback:
-                progress_callback(f"{model_id} 下载完成")
-            return True, f"模型 {model_id} 下载完成"
+            # 下载后校验完整性
+            status = self.check_all_models()
+            if status.get(model_id, {}).get("cached"):
+                return True, f"模型 {model_id} 下载完成且验证通过"
+            else:
+                aux = status.get(model_id, {}).get("aux_missing", [])
+                if aux:
+                    return False, f"下载不完整：缺少辅助文件 {', '.join(aux)}"
+                return False, f"下载不完整：模型 {model_id} 未通过完整性校验"
 
         except Exception as e:
-            error_msg = f"下载 {model_id} 失败: {e}"
-            logger.error(error_msg)
-            if progress_callback:
-                progress_callback(error_msg)
-            return False, error_msg
+            logger.error(f"下载模型 {model_id} 失败: {e}")
+            return False, f"下载失败: {e}"
 
     def download_all_missing(self, progress_callback=None):
         """下载所有缺失的必需模型"""
@@ -340,6 +364,32 @@ def _ensure_ffmpeg_in_path():
 _ensure_ffmpeg_in_path()
 
 
+def _safe_model_path(model_path):
+    """处理路径中含非 ASCII 字符导致 sentencepiece 崩溃的问题
+
+    sentencepiece C++ 层在 Windows 上无法处理中文路径，
+    如果路径包含非 ASCII 字符，将整个模型目录复制到临时 ASCII 路径。
+    """
+    if not model_path or not os.path.isdir(model_path):
+        return model_path
+
+    # 检查路径是否纯 ASCII
+    try:
+        model_path.encode('ascii')
+        return model_path  # 纯 ASCII 路径，无需处理
+    except UnicodeEncodeError:
+        pass
+
+    # 路径含非 ASCII 字符，复制到临时目录
+    import shutil
+    import tempfile
+    tmp_dir = tempfile.mkdtemp(prefix="ms_model_")
+    dest = os.path.join(tmp_dir, os.path.basename(model_path))
+    logger.info(f"Non-ASCII path detected, copying model to: {dest}")
+    shutil.copytree(model_path, dest, dirs_exist_ok=True)
+    return dest
+
+
 class Transcriber:
     """MeetScribe 核心转写引擎"""
 
@@ -394,6 +444,9 @@ class Transcriber:
         # 使用本地缓存路径（已确认存在）
         sensevoice_path = _resolve_model_path("SenseVoiceSmall", self.model_cache_dir)
         vad_path = _resolve_model_path("fsmn-vad", self.model_cache_dir)
+
+        # 处理非 ASCII 路径（sentencepiece C++ 不支持中文路径）
+        sensevoice_path = _safe_model_path(sensevoice_path)
 
         kwargs = {
             "model": sensevoice_path,
@@ -474,6 +527,9 @@ class Transcriber:
 
         sensevoice_path = _resolve_model_path("SenseVoiceSmall", self.model_cache_dir)
         vad_path = _resolve_model_path("fsmn-vad", self.model_cache_dir)
+
+        # 处理非 ASCII 路径（sentencepiece C++ 不支持中文路径）
+        sensevoice_path = _safe_model_path(sensevoice_path)
 
         start_time = time.time()
         sentences = []

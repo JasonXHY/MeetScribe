@@ -568,6 +568,12 @@ class HomePage(QWidget):
             item = self._app.file_manager.get_file(file_path)
             if item and item.result_path and os.path.exists(item.result_path):
                 summary_path = get_summary_path(item.result_path)
+                if summary_path is None:
+                    import time
+                    file_age = time.time() - os.path.getmtime(item.result_path)
+                    if file_age < 60:
+                        QMessageBox.information(self, "提示", "AI 摘要正在生成中，请稍后再预览")
+                        return
                 dialog = PreviewDialog(self, item.file_name, item.result_path, summary_path)
                 dialog.exec()
             else:
@@ -762,11 +768,11 @@ class HomePage(QWidget):
                 QMessageBox.information(self, "提示", "正在转写中，请等待完成")
                 return
             fmt = self.get_selected_format()
-            # 只调用 start，不重复 add_to_queue
             handler.start([file_path], fmt, {}, "")
             self._btn_transcribe.setEnabled(False)
             self._btn_transcribe.setText("转写中...")
             self._log(f"开始转写: {os.path.basename(file_path)}")
+            self.refresh_file_list()
 
     def _retry_transcription(self, file_path):
         """重新转写"""
@@ -813,6 +819,7 @@ class HomePage(QWidget):
                 self._btn_transcribe.setEnabled(False)
                 self._btn_transcribe.setText("转写中...")
                 self._log(f"开始转写 {len(all_paths)} 个文件...")
+                self.refresh_file_list()
 
     # ══════════════════════════════════════════════════════════
     #  Public Methods
@@ -841,7 +848,7 @@ class HomePage(QWidget):
                     "topic": getattr(f, 'topic', '') or '',
                     "duration": f.duration_str if hasattr(f, 'duration_str') else self._format_duration(getattr(f, 'duration_s', 0)),
                     "size": f.size_str if hasattr(f, 'size_str') else self._format_size(getattr(f, 'file_size', 0)),
-                    "status": status_map.get(f.status, "pending"),
+                    "status": f.status.value if hasattr(f.status, 'value') else str(f.status),
                     "queue_pos": None,
                 })
             self._file_list_view.set_files(file_data)

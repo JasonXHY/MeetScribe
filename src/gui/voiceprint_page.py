@@ -16,12 +16,12 @@ from PySide6.QtWidgets import (
     QFrame, QScrollArea, QLineEdit, QMessageBox, QInputDialog,
     QDialog, QSplitter, QListWidget, QListWidgetItem, QGroupBox
 )
-from PySide6.QtCore import Qt, Signal, QTimer, QThread
+from PySide6.QtCore import Qt, Signal, QTimer, QThread, QSize
 from PySide6.QtGui import QFont
 
 from gui.styles import (
     C_BG, C_CARD, C_BORDER, C_ACCENT, C_ACCENT_LT, C_BTN_HOVER,
-    C_SUCCESS, C_ERROR, C_TXT1, C_TXT2, C_TXT3, C_PURPLE,
+    C_SUCCESS, C_ERROR, C_WARN, C_TXT1, C_TXT2, C_TXT3, C_PURPLE,
     FONT_FAMILY, SPEAKER_COLORS, DEFAULT_SPK_QUALITY,
 )
 
@@ -535,7 +535,7 @@ class VoiceprintPage(QWidget):
                 # 创建带彩色头像的自定义widget
                 item_widget = QWidget()
                 item_layout = QHBoxLayout(item_widget)
-                item_layout.setContentsMargins(10, 8, 10, 8)
+                item_layout.setContentsMargins(10, 10, 10, 10)
                 item_layout.setSpacing(10)
 
                 # 彩色圆形头像
@@ -563,7 +563,7 @@ class VoiceprintPage(QWidget):
                 item_layout.addStretch()
 
                 list_item = QListWidgetItem()
-                list_item.setSizeHint(item_widget.sizeHint())
+                list_item.setSizeHint(QSize(0, 52))
                 list_item.setData(Qt.UserRole, name)
                 self._speaker_list.addItem(list_item)
                 self._speaker_list.setItemWidget(list_item, item_widget)
@@ -724,7 +724,7 @@ class VoiceprintPage(QWidget):
                 empty_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 12px; background: transparent; border: none;")
                 samples_layout.addWidget(empty_lbl)
 
-            self._detail_layout.addWidget(samples_card, 1)
+            self._detail_layout.addWidget(samples_card)
             self._detail_layout.addStretch()
 
         except Exception as e:

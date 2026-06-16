@@ -113,6 +113,7 @@ class TranscriptionHandler(QObject):
             out_dir=out_dir,
             merge=merge,
         )
+        self._current_batch_paths = set(file_paths)
 
         if self._transcribing:
             self._task_queue.add_task(task)
@@ -273,6 +274,8 @@ class TranscriptionHandler(QObject):
         # 声纹匹配
         if self._speaker_embeddings:
             self._match_voiceprints()
+        else:
+            logger.warning("[VOICEPRINT] No speaker embeddings received, skipping match")
 
         # 清理资源
         try:
@@ -304,7 +307,7 @@ class TranscriptionHandler(QObject):
     # ══════════════════════════════════════════════════════════
 
     def _match_voiceprints(self):
-        """用音色库匹配转写结果中的说话人"""
+        """用音色库匹配转写结果中的说话人（两阶段匹配+冲突检测）"""
         if not self._speaker_embeddings:
             logger.debug("[VOICEPRINT] No speaker embeddings available")
             return
@@ -315,7 +318,7 @@ class TranscriptionHandler(QObject):
         self._voiceprint_match_results = {}
 
         try:
-            from voiceprint import VoiceprintLibrary
+            from voiceprint import VoiceprintLibrary, HIGH_CONFIDENCE
             library = VoiceprintLibrary()
 
             speaker_embeddings = self._extract_speaker_embeddings()
@@ -323,60 +326,73 @@ class TranscriptionHandler(QObject):
                 logger.debug("[VOICEPRINT] No valid speaker embeddings extracted")
                 return
 
-            logger.debug(f"[VOICEPRINT] Matching {len(speaker_embeddings)} speakers against library")
-            matched_count = 0
+            # 第一阶段：收集所有匹配结果
+            all_matches = []
             for speaker_id, embedding in speaker_embeddings.items():
-                name, confidence = library.match_with_confidence(embedding)
-                logger.debug(f"[VOICEPRINT] Speaker {speaker_id + 1}: match={name}, confidence={confidence}")
+                name, score = library.match(embedding)
                 if name:
-                    if self._app and hasattr(self._app, 'file_manager'):
-                        for item in self._app.file_manager.files:
-                            if item.status == FileStatus.DONE and item.result_path:
-                                if item.file_path not in self._current_batch_paths:
-                                    continue
-                                str_mapping = item.speaker_names or {}
-                                str_key = str(speaker_id + 1)
-                                current_name = str_mapping.get(str_key, "")
-                                needs_update = (
-                                    str_key not in str_mapping
-                                    or current_name.startswith("Speaker")
-                                    or "Speaker" in current_name
-                                )
-                                if needs_update:
-                                    str_mapping[str_key] = name
-                                    self._app.file_manager.update_speaker_names(
-                                        item.file_path, str_mapping
-                                    )
-                                    if os.path.exists(item.result_path):
-                                        apply_speaker_mapping(
-                                            item.result_path, {speaker_id + 1: name}
-                                        )
-                                        summary_path = get_summary_path(item.result_path)
-                                        if summary_path and os.path.exists(summary_path):
-                                            apply_speaker_mapping(
-                                                summary_path, {speaker_id + 1: name}
-                                            )
-                    matched_count += 1
-                    self._voiceprint_match_results[speaker_id] = {
-                        "name": name,
-                        "confidence": confidence,
-                    }
-                    self.log_message.emit(
-                        f"音色库匹配: Speaker {speaker_id + 1} -> {name} ({confidence})"
-                    )
-                    if confidence == "confirmed":
-                        try:
+                    confidence = "confirmed" if score >= HIGH_CONFIDENCE else "suggested"
+                    all_matches.append((speaker_id, name, confidence, score, embedding))
+                    logger.debug(f"[VOICEPRINT] Speaker {speaker_id + 1}: match={name}, "
+                               f"score={score:.3f}, confidence={confidence}")
+
+            if not all_matches:
+                logger.debug("[VOICEPRINT] No matches found")
+                return
+
+            # 第二阶段：冲突检测 — 对每个音色库成员，只保留 score 最高的
+            best_by_name = {}
+            for speaker_id, name, confidence, score, embedding in all_matches:
+                if name not in best_by_name or score > best_by_name[name][2]:
+                    best_by_name[name] = (speaker_id, confidence, score, embedding)
+
+            # 第三阶段：写入映射
+            for name, (speaker_id, confidence, score, embedding) in best_by_name.items():
+                self._apply_voiceprint_match(name, speaker_id, confidence, embedding, library)
+
+            # 记录未写入的匹配（供日志和后续确认）
+            written_ids = {v[0] for v in best_by_name.values()}
+            for speaker_id, name, confidence, score, embedding in all_matches:
+                if speaker_id not in written_ids:
+                    logger.info(f"[VOICEPRINT] Skipped conflict: Speaker {speaker_id+1} -> {name} "
+                              f"(score={score:.3f}, lower than best match)")
+
+        except Exception as e:
+            logger.error(f"Voiceprint matching failed: {e}")
+
+    def _apply_voiceprint_match(self, name, speaker_id, confidence, embedding, library):
+        """将单个说话人的匹配结果写入文件"""
+        try:
+            if self._app and hasattr(self._app, 'file_manager'):
+                for item in self._app.file_manager.files:
+                    if item.status == FileStatus.DONE and item.result_path:
+                        if item.file_path not in self._current_batch_paths:
+                            continue
+                        str_mapping = item.speaker_names or {}
+                        str_key = str(speaker_id + 1)
+                        str_mapping[str_key] = name
+                        self._app.file_manager.update_speaker_names(
+                            item.file_path, str_mapping
+                        )
+                        if os.path.exists(item.result_path):
+                            apply_speaker_mapping(item.result_path, {speaker_id + 1: name})
+                            summary_path = get_summary_path(item.result_path)
+                            if summary_path and os.path.exists(summary_path):
+                                apply_speaker_mapping(summary_path, {speaker_id + 1: name})
+
+                        self.log_message.emit(
+                            f"音色库匹配: Speaker {speaker_id + 1} -> {name} ({confidence})"
+                        )
+
+                        # confirmed 级别自动追加声纹样本
+                        if confidence == "confirmed":
                             quality = self._speaker_qualities.get(speaker_id, DEFAULT_SPK_QUALITY)
-                            source_name = "auto_match"
-                            if self._app and hasattr(self._app, 'file_manager'):
-                                for item in self._app.file_manager.files:
-                                    if item.file_path in self._current_batch_paths:
-                                        source_name = getattr(item, 'file_name', 'auto_match')
-                                        break
-                            library.add_speaker(name, embedding, source=source_name, quality=quality)
+                            source_name = getattr(item, 'file_name', 'auto_match')
+                            library.add_speaker(name, embedding,
+                                source=source_name, quality=quality)
                             logger.info(f"自动添加声纹样本: {name}")
-                        except Exception as e:
-                            logger.warning(f"自动添加声纹失败: {e}")
+        except Exception as e:
+            logger.error(f"Apply voiceprint match failed: {e}")
 
             if matched_count > 0:
                 logger.info(f"[VOICEPRINT] Matched {matched_count} speakers")
@@ -412,9 +428,10 @@ class TranscriptionHandler(QObject):
                 return None
 
             vendor = self._app.config.get("ai_vendor", "")
-            api_key = self._app.config.get("ai_api_key", "")
+            # 优先读用户 Key，为空则读内置 Key
+            api_key = self._app.config.get("ai_user_api_key", "")
             if not api_key:
-                api_key = self._app.config.get("mimo_api_key", "")
+                api_key = self._app.config.get("ai_default_api_key", "")
             if not api_key:
                 return None
 
@@ -466,7 +483,7 @@ class TranscriptionHandler(QObject):
                 self.log_message.emit("未配置云端 API Key，跳过自动摘要")
                 return
 
-            summary = ai.generate_summary(transcript)
+            summary = ai.generate_summary(transcript, voiceprint_matches=self._voiceprint_match_results)
             if summary and not summary.startswith("[错误]"):
                 summary_name = f"{base_name}_summary.md"
                 summary_path = os.path.join(out_dir, summary_name)

@@ -14,9 +14,14 @@ SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-# ── 日志目录 ──
-LOG_DIR = os.path.join(os.path.dirname(SRC_DIR), "logs")
-os.makedirs(LOG_DIR, exist_ok=True)
+# ── 项目根目录 ──
+PROJECT_ROOT = os.path.dirname(SRC_DIR)
+
+# ── 启动时预创建必要目录 ──
+for _dir in ("logs", "config", "data", "recordings", "transcripts"):
+    os.makedirs(os.path.join(PROJECT_ROOT, _dir), exist_ok=True)
+
+LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "meetscribe.log")
 
 
