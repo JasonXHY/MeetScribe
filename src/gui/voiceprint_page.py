@@ -319,13 +319,12 @@ class AddVoiceDialog(QDialog):
 
 
 class SpeakerItemWidget(QWidget):
-    """说话人列表项 — 自管理选中/hover 背景色，绕过 Qt setItemWidget QSS 冲突"""
+    """说话人列表项 — 自管理点击信号，绕过 Qt setItemWidget QSS 冲突"""
 
     clicked = Signal()  # 点击信号
 
     def __init__(self, name, sample_count, color, parent=None):
         super().__init__(parent)
-        self._selected = False
         self._name = name
 
         layout = QHBoxLayout(self)
@@ -363,51 +362,10 @@ class SpeakerItemWidget(QWidget):
         layout.addLayout(info_layout)
         layout.addStretch()
 
-        self._apply_style()
-
-    def set_selected(self, selected):
-        """切换选中状态"""
-        if self._selected != selected:
-            self._selected = selected
-            self._apply_style()
-
-    def enterEvent(self, event):
-        if not self._selected:
-            self.setStyleSheet("""
-                SpeakerItemWidget {
-                    background-color: #F9FAFB;
-                    border-radius: 6px;
-                }
-            """)
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        if not self._selected:
-            self._apply_style()
-        super().leaveEvent(event)
-
     def mousePressEvent(self, event):
         """点击时发送选中信号"""
         self.clicked.emit()
         super().mousePressEvent(event)
-
-    def _apply_style(self):
-        if self._selected:
-            self.setStyleSheet(f"""
-                SpeakerItemWidget {{
-                    background-color: {C_ACCENT_LT};
-                    border-radius: 6px;
-                    border-left: 3px solid {C_ACCENT};
-                }}
-            """)
-        else:
-            self.setStyleSheet("""
-                SpeakerItemWidget {
-                    background-color: transparent;
-                    border-radius: 6px;
-                    border-left: 3px solid transparent;
-                }
-            """)
 
 
 class VoiceprintPage(QWidget):
@@ -529,11 +487,11 @@ class VoiceprintPage(QWidget):
                 background: transparent;
             }}
             QListWidget::item:selected {{
-                background: transparent;
+                background-color: {C_ACCENT_LT};
                 color: {C_TXT1};
             }}
             QListWidget::item:hover {{
-                background: transparent;
+                background-color: #F9FAFB;
             }}
         """)
         self._speaker_list.currentItemChanged.connect(self._on_speaker_select)
@@ -659,17 +617,8 @@ class VoiceprintPage(QWidget):
             item.setHidden(text != "" and text not in name.lower())
 
     def _on_speaker_select(self, current, previous):
-        """选中说话人 — 更新高亮状态"""
-        # 取消上一个选中项的高亮
-        if previous:
-            prev_widget = self._speaker_list.itemWidget(previous)
-            if prev_widget and hasattr(prev_widget, 'set_selected'):
-                prev_widget.set_selected(False)
-        # 设置当前选中项的高亮
+        """选中说话人 — 更新详情面板"""
         if current:
-            curr_widget = self._speaker_list.itemWidget(current)
-            if curr_widget and hasattr(curr_widget, 'set_selected'):
-                curr_widget.set_selected(True)
             name = current.data(Qt.UserRole)
             self._selected_speaker = name
             self._show_speaker_detail(name)
@@ -747,6 +696,10 @@ class VoiceprintPage(QWidget):
             ]
             if profile.embeddings:
                 avg_quality = sum(e.get('quality', DEFAULT_SPK_QUALITY) for e in profile.embeddings) / len(profile.embeddings)
+                logger.debug(f"[VOICEPRINT] Speaker: {speaker_name}, embeddings count: {len(profile.embeddings)}")
+                for idx, emb in enumerate(profile.embeddings):
+                    logger.debug(f"[VOICEPRINT] Sample {idx}: quality={emb.get('quality', 'N/A')}")
+                logger.debug(f"[VOICEPRINT] Average quality: {avg_quality}")
                 info_items.append(("平均质量", f"{avg_quality:.2f}"))
             for label, value in info_items:
                 row = QHBoxLayout()

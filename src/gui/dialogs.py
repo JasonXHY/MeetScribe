@@ -150,7 +150,7 @@ class PreviewDialog(QDialog):
 class ExportDialog(QDialog):
     """导出对话框"""
 
-    def __init__(self, parent, file_path, result_path):
+    def __init__(self, parent, file_path, result_path, summary_path=None):
         super().__init__(parent)
         self.setWindowTitle("导出转写结果")
         self.setMinimumSize(400, 300)
@@ -158,6 +158,7 @@ class ExportDialog(QDialog):
 
         self._file_path = file_path
         self._result_path = result_path
+        self._summary_path = summary_path
 
         self._build()
 
@@ -239,6 +240,16 @@ class ExportDialog(QDialog):
             try:
                 with open(self._result_path, "r", encoding="utf-8") as f:
                     content = f.read()
+
+                # 读取摘要内容（如果存在）
+                summary_content = ""
+                if self._summary_path and os.path.exists(self._summary_path):
+                    with open(self._summary_path, "r", encoding="utf-8") as f:
+                        summary_content = f.read()
+
+                # 合并内容：摘要在前，转写在后
+                if summary_content:
+                    content = f"{summary_content}\n\n---\n\n{content}"
 
                 if fmt == "txt":
                     content = self._strip_markdown(content)
