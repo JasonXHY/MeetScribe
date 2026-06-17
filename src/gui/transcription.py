@@ -203,6 +203,7 @@ class TranscriptionHandler(QObject):
                 self._app.file_manager.update_status(fp, FileStatus.DONE, rpath)
             self._file_status[fp] = "done"
             self.file_status_changed.emit(fp, FileStatus.DONE)
+            self.log_message.emit(f"[转写完成] {os.path.basename(fp)}")
         elif msg_type == "merge_done":
             src_paths, rpath, base = msg[1], msg[2], msg[3]
             if self._app and hasattr(self._app, 'file_manager'):
@@ -235,7 +236,7 @@ class TranscriptionHandler(QObject):
                 or auto_correction == "true"
             )
             if should_correct:
-                self.log_message.emit("正在进行 LLM 转写纠错...")
+                self.log_message.emit(f"[AI纠错] 正在进行转写纠错...")
                 self._generate_correction(raw_text, base, out_dir, transcript_path)
         elif msg_type == "auto_summary":
             # AI 摘要
@@ -248,7 +249,7 @@ class TranscriptionHandler(QObject):
                 or auto_summary == "true"
             )
             if should_summary:
-                self.log_message.emit("正在生成 AI 摘要...")
+                self.log_message.emit(f"[AI摘要] 正在生成摘要...")
                 # 读取转写内容
                 transcript_path = os.path.join(out_dir, f"{base}_transcript.md")
                 if os.path.exists(transcript_path):
@@ -373,6 +374,9 @@ class TranscriptionHandler(QObject):
         匹配记录会先行写入 self._voiceprint_match_results（供摘要注入 AI-006 使用），
         即使后续写文件或自动追加声纹样本失败，匹配结果仍然保留。
         """
+        logger.debug(f"[VOICEPRINT] Applying match: speaker_id={speaker_id}, name={name}, confidence={confidence}")
+        logger.debug(f"[VOICEPRINT] Current batch paths: {self._current_batch_paths}")
+
         # 记录匹配结果（供摘要注入与姓名提取优先级判断使用）
         self._voiceprint_match_results[speaker_id] = {
             "name": name,
@@ -383,13 +387,17 @@ class TranscriptionHandler(QObject):
                 for item in self._app.file_manager.files:
                     if item.status == FileStatus.DONE and item.result_path:
                         if item.file_path not in self._current_batch_paths:
+                            logger.debug(f"[VOICEPRINT] Skipping {item.file_path}: not in batch")
                             continue
+                        logger.debug(f"[VOICEPRINT] Item status: {item.status}, result_path: {item.result_path}")
+                        logger.debug(f"[VOICEPRINT] File path in batch: {item.file_path in self._current_batch_paths}")
                         str_mapping = item.speaker_names or {}
                         str_key = str(speaker_id + 1)
                         str_mapping[str_key] = name
                         self._app.file_manager.update_speaker_names(
                             item.file_path, str_mapping
                         )
+                        logger.debug(f"[VOICEPRINT] Updated speaker_names: {str_mapping}")
                         if os.path.exists(item.result_path):
                             apply_speaker_mapping(item.result_path, {speaker_id + 1: name})
                             summary_path = get_summary_path(item.result_path)
@@ -617,10 +625,18 @@ class TranscriptionHandler(QObject):
             lines = summary.splitlines()
             for line in lines[:10]:
                 line = line.strip()
+                # 匹配 "# 标题" 或 "## 标题" 格式
                 if line.startswith("# ") or line.startswith("## "):
                     topic = line.lstrip("# ").strip()
                     if len(topic) > 5:
                         return topic[:50]
+                # 匹配 "主题：xxx" 或 "**主题**：xxx" 格式
+                if "主题" in line:
+                    m = re.search(r'主题[：:]\s*(.+)', line)
+                    if m:
+                        topic = m.group(1).strip()
+                        if len(topic) > 2:
+                            return topic[:50]
         except Exception:
             pass
         return None

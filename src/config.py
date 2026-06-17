@@ -66,7 +66,10 @@ class Config:
             try:
                 with open(self._path, "r", encoding="utf-8") as f:
                     saved = json.load(f)
-                self._data.update(saved)
+                # 过滤空字符串值，防止覆盖 DEFAULTS 中的有意义默认值
+                filtered = {k: v for k, v in saved.items()
+                           if v != "" or k not in DEFAULTS or DEFAULTS[k] == ""}
+                self._data.update(filtered)
                 logger.info(f"Config loaded from {self._path}")
             except Exception as e:
                 logger.warning(f"Failed to load config: {e}, using defaults")

@@ -614,9 +614,18 @@ class HomePage(QWidget):
             self.refresh_file_list()
 
     def _open_folder(self, file_path):
-        """打开文件所在文件夹"""
+        """打开转写结果所在文件夹"""
         import subprocess
-        folder = os.path.dirname(file_path)
+
+        folder = None
+        if self._app and hasattr(self._app, 'file_manager'):
+            item = self._app.file_manager.get_file(file_path)
+            if item and item.result_path:
+                folder = os.path.dirname(item.result_path)
+
+        if not folder or not os.path.exists(folder):
+            folder = os.path.dirname(file_path)
+
         if os.path.exists(folder):
             subprocess.Popen(["explorer", folder])
             self._log(f"已打开文件夹: {folder}")
@@ -624,10 +633,12 @@ class HomePage(QWidget):
     def _export_result(self, file_path):
         """导出转写结果"""
         from gui.dialogs import ExportDialog
+        from utils import get_summary_path
         if self._app and hasattr(self._app, 'file_manager'):
             item = self._app.file_manager.get_file(file_path)
             if item and item.result_path and os.path.exists(item.result_path):
-                dialog = ExportDialog(self, file_path, item.result_path)
+                summary_path = get_summary_path(item.result_path)
+                dialog = ExportDialog(self, file_path, item.result_path, summary_path)
                 dialog.exec()
             else:
                 QMessageBox.information(self, "提示", "结果文件不存在")
