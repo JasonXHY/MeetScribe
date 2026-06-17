@@ -186,6 +186,35 @@ class TestRestoreConfig:
         assert page._device_var.currentText() == "CUDA (GPU)"
 
 
+class TestOllamaConfig:
+    """Ollama 本地 LLM 地址 / 模型配置（SET-016）"""
+
+    def test_ollama_address_field_exists(self, config, app):
+        page = _create_settings_page(config)
+        assert hasattr(page, '_ollama_url_entry')
+        assert hasattr(page, '_ollama_model_entry')
+
+    def test_ollama_address_default(self, config, app):
+        page = _create_settings_page(config)
+        assert page._ollama_url_entry.text() == "http://localhost:11434/v1"
+        assert page._ollama_model_entry.text() == "qwen3:1.7b"
+
+    def test_ollama_address_save_restore(self, config, app):
+        page = _create_settings_page(config)
+        page._ollama_url_entry.setText("http://host:1234/v1")
+        page._ollama_model_entry.setText("llama3")
+        with patch('gui.settings_page.QMessageBox'):
+            page._on_save()
+
+        assert config.get("ollama_url") == "http://host:1234/v1"
+        assert config.get("ollama_model") == "llama3"
+
+        # 重建页面，确认回填
+        page2 = _create_settings_page(config)
+        assert page2._ollama_url_entry.text() == "http://host:1234/v1"
+        assert page2._ollama_model_entry.text() == "llama3"
+
+
 class TestModelManagement:
     """模型管理按钮和状态"""
 
@@ -204,3 +233,28 @@ class TestModelManagement:
     def test_model_status_label_exists(self, config, app):
         page = _create_settings_page(config)
         assert hasattr(page, '_model_status_label')
+
+
+class TestOutputDirRoundtrip:
+    """T-G3: 转写输出目录 save/restore 必须用同一个配置键。"""
+
+    def test_output_dir_save_restore_roundtrip(self, config, app):
+        # 1. 在设置页填入输出目录并保存
+        page = _create_settings_page(config)
+        page._out_dir_entry.setText("/custom/out/dir")
+        with patch('gui.settings_page.QMessageBox'):
+            page._on_save()
+
+        # 2. 用同一 config 重建设置页（模拟重启）
+        page2 = _create_settings_page(config)
+
+        # 3. 输出目录输入框应回填刚保存的值
+        assert page2._out_dir_entry.text() == "/custom/out/dir"
+
+    def test_output_dir_saved_under_transcript_dir_key(self, config, app):
+        """权威键为 transcript_dir（与 app.get_output_dir 一致）。"""
+        page = _create_settings_page(config)
+        page._out_dir_entry.setText("/custom/out/dir")
+        with patch('gui.settings_page.QMessageBox'):
+            page._on_save()
+        assert config.get("transcript_dir") == "/custom/out/dir"

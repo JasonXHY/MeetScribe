@@ -55,6 +55,58 @@ class TestFileManager:
             os.remove(temp_path)
             os.remove(fm._data_file)
 
+    def test_remove_file_with_source_deletion(self):
+        """测试 remove_file 可选删除磁盘源文件（FILE-002）。
+
+        - delete_source=True 时磁盘源文件被删除；
+        - delete_source=False（默认）时磁盘源文件保留；
+        - 源文件不存在时不抛异常，列表项仍被移除。
+        """
+        # 1) delete_source=False：源文件保留
+        fm = self._make_fm()
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            keep_path = f.name
+        try:
+            fm.add_file(keep_path, duration_s=10.0)
+            removed = fm.remove_file(keep_path, delete_source=False)
+            assert removed is not None
+            assert len(fm.files) == 0
+            assert os.path.exists(keep_path), "未勾选删除源文件时磁盘文件应保留"
+        finally:
+            if os.path.exists(keep_path):
+                os.remove(keep_path)
+            os.remove(fm._data_file)
+
+        # 2) delete_source=True：源文件被删除
+        fm = self._make_fm()
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            del_path = f.name
+        try:
+            fm.add_file(del_path, duration_s=10.0)
+            removed = fm.remove_file(del_path, delete_source=True)
+            assert removed is not None
+            assert len(fm.files) == 0
+            assert not os.path.exists(del_path), "勾选删除源文件时磁盘文件应被删除"
+        finally:
+            if os.path.exists(del_path):
+                os.remove(del_path)
+            os.remove(fm._data_file)
+
+        # 3) 源文件不存在时不崩溃，列表项仍被移除
+        fm = self._make_fm()
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            missing_path = f.name
+        try:
+            fm.add_file(missing_path, duration_s=10.0)
+            os.remove(missing_path)  # 先删除磁盘文件，模拟缺失/占用
+            removed = fm.remove_file(missing_path, delete_source=True)
+            assert removed is not None
+            assert len(fm.files) == 0
+        finally:
+            if os.path.exists(missing_path):
+                os.remove(missing_path)
+            os.remove(fm._data_file)
+
     def test_file_manager_update_status(self):
         """测试更新状态"""
         fm = self._make_fm()

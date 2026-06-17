@@ -28,6 +28,12 @@ from gui.file_list_view import FileListView
 
 logger = logging.getLogger("MeetScribe")
 
+# FILE-001: 导入音频文件过滤器（含 spec 要求的全部格式 WAV/MP3/FLAC/M4A/AAC/OGG/WMA）
+AUDIO_FILE_FILTER = (
+    "音频文件 (*.wav *.mp3 *.m4a *.flac *.aac *.ogg *.oga *.opus *.wma);;"
+    "所有文件 (*.*)"
+)
+
 USER_FRIENDLY_KEYWORDS = [
     "录音已开始", "录音已停止", "录音已保存",
     "转写完成", "转写已停止", "转写中", "正在转写",
@@ -458,8 +464,7 @@ class HomePage(QWidget):
     def _add_files(self):
         """添加音频文件"""
         paths, _ = QFileDialog.getOpenFileNames(
-            self, "选择音频文件", "",
-            "音频文件 (*.wav *.mp3 *.m4a *.flac *.ogg *.oga *.opus);;所有文件 (*.*)"
+            self, "选择音频文件", "", AUDIO_FILE_FILTER
         )
         if not paths:
             return
@@ -472,6 +477,25 @@ class HomePage(QWidget):
         else:
             self._log("文件管理器未初始化")
 
+    def _confirm_delete(self, message):
+        """删除确认弹窗，含"同时删除磁盘源文件"复选框（FILE-002）。
+
+        Returns:
+            (confirmed, delete_source): confirmed 为用户是否点击确认，
+            delete_source 为是否勾选了删除磁盘源文件。
+        """
+        from PySide6.QtWidgets import QCheckBox
+
+        box = QMessageBox(self)
+        box.setWindowTitle("确认")
+        box.setText(message)
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        box.setDefaultButton(QMessageBox.No)
+        checkbox = QCheckBox("同时删除磁盘源文件")
+        box.setCheckBox(checkbox)
+        confirmed = box.exec() == QMessageBox.Yes
+        return confirmed, checkbox.isChecked()
+
     def _delete_selected(self):
         """删除选中的文件"""
         selected = self._file_list_view.get_selected()
@@ -479,15 +503,13 @@ class HomePage(QWidget):
             QMessageBox.information(self, "提示", "请先点击文件行选中一个或多个文件")
             return
 
-        reply = QMessageBox.question(
-            self, "确认",
-            f"从列表中移除选中的 {len(selected)} 个文件?",
-            QMessageBox.Yes | QMessageBox.No
+        confirmed, delete_source = self._confirm_delete(
+            f"从列表中移除选中的 {len(selected)} 个文件?"
         )
-        if reply == QMessageBox.Yes:
+        if confirmed:
             if self._app and hasattr(self._app, 'file_manager'):
                 for fp in list(selected):
-                    self._app.file_manager.remove_file(fp)
+                    self._app.file_manager.remove_file(fp, delete_source=delete_source)
                 self._file_list_view.clear_selection()
                 self._log(f"已删除 {len(selected)} 个文件")
                 self.refresh_file_list()
@@ -582,7 +604,12 @@ class HomePage(QWidget):
     def _delete_single(self, file_path):
         """删除单个文件"""
         if self._app and hasattr(self._app, 'file_manager'):
-            self._app.file_manager.remove_file(file_path)
+            confirmed, delete_source = self._confirm_delete(
+                f"从列表中移除「{os.path.basename(file_path)}」?"
+            )
+            if not confirmed:
+                return
+            self._app.file_manager.remove_file(file_path, delete_source=delete_source)
             self._log(f"已删除: {os.path.basename(file_path)}")
             self.refresh_file_list()
 
@@ -850,6 +877,7 @@ class HomePage(QWidget):
                     "size": f.size_str if hasattr(f, 'size_str') else self._format_size(getattr(f, 'file_size', 0)),
                     "status": f.status.value if hasattr(f.status, 'value') else str(f.status),
                     "queue_pos": None,
+                    "merged": bool(getattr(f, 'merged_group', '')),
                 })
             self._file_list_view.set_files(file_data)
             self._file_count_lbl.setText(f"共 {len(files)} 个文件")

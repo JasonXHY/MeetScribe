@@ -127,14 +127,23 @@ def transcribe_worker_process(queue, model_cache_dir, device,
         ext = ext_map.get(output_format, ".txt")
 
         if merge:
-            queue.put(("log", f"合并模式：将 {len(file_paths)} 个文件合并转写"))
+            # 区分双轨对（mic + system 同一次录音）与普通多文件合并：
+            # 双轨走 merge_dual_transcripts 按时间戳交错并加本地/远程前缀，
+            # 普通多文件仍走 "## file" 顺序拼接。判定与合并都在
+            # dual_track_merge.build_merged_transcript 这个纯函数里完成，
+            # worker 只负责逐轨转写后把文本喂进去。
+            from dual_track_merge import build_merged_transcript, is_dual_track_group
+
+            is_dual = is_dual_track_group(file_paths) is not None
+            mode_desc = "双轨" if is_dual else "多文件"
+            queue.put(("log", f"合并模式（{mode_desc}）：将 {len(file_paths)} 个文件合并转写"))
             for fp in file_paths:
                 queue.put(("processing", fp))
 
             first_name = os.path.basename(file_paths[0])
             base = os.path.splitext(first_name)[0] + "_merged"
 
-            all_results = []
+            per_file_texts = {}
             import time as _time
             start_time = _time.time()
             for idx, fp in enumerate(file_paths):
@@ -150,7 +159,7 @@ def transcribe_worker_process(queue, model_cache_dir, device,
                     speaker_names=speaker_names,
                     progress_callback=progress_cb,
                 )
-                all_results.append(f"## {fname}\n\n{result}")
+                per_file_texts[fp] = result
 
                 # 提取并发送说话人嵌入向量（供音色库匹配）
                 _send_embeddings(queue, transcriber)
@@ -158,7 +167,11 @@ def transcribe_worker_process(queue, model_cache_dir, device,
                 _send_sentences(queue, transcriber)
             send_progress(queue, 100, "合并完成", len(file_paths), len(file_paths), "")
 
-            merged_result = "\n\n---\n\n".join(all_results)
+            merged_result, merged_is_dual = build_merged_transcript(
+                file_paths, per_file_texts, mic_label="本地", sys_label="远程"
+            )
+            if merged_is_dual:
+                queue.put(("log", "双轨按时间戳合并完成（本地/远程）"))
             rname = f"{base}_transcript.md"
             rpath = os.path.join(output_dir, rname)
             with open(rpath, "w", encoding="utf-8") as rf:

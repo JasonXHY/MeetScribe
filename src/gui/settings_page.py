@@ -144,9 +144,13 @@ class SettingsPage(QWidget):
         self._rec_dir_entry = self._create_path_row(
             group, "录音保存目录",
             self._config.get("recording_dir", "") if self._config else "")
+        # 转写输出目录：权威键为 transcript_dir（与 _on_save 写入及
+        # app.get_output_dir() 读取一致）。回退 output_dir 仅为兼容旧配置。
+        out_dir_default = ""
+        if self._config:
+            out_dir_default = self._config.get("transcript_dir", "") or self._config.get("output_dir", "")
         self._out_dir_entry = self._create_path_row(
-            group, "转写输出目录",
-            self._config.get("output_dir", "") if self._config else "")
+            group, "转写输出目录", out_dir_default)
 
     def _build_engine_section(self, layout):
         """转写引擎设置（含四项引擎参数）"""
@@ -256,6 +260,18 @@ class SettingsPage(QWidget):
         self._ollama_combo.setFixedWidth(200)
         self._form_row(group, "本地 LLM", self._ollama_combo)
         self._disable_combo_wheel(self._ollama_combo)
+
+        # Ollama 服务地址输入框（SET-016：QCheckBox/开关 + 地址输入）
+        self._ollama_url_entry = QLineEdit("http://localhost:11434/v1")
+        self._ollama_url_entry.setFixedWidth(280)
+        self._form_row(group, "Ollama 地址", self._ollama_url_entry,
+                       hint_text="本地 Ollama 服务地址，默认 http://localhost:11434/v1")
+
+        # Ollama 模型名输入框
+        self._ollama_model_entry = QLineEdit("qwen3:1.7b")
+        self._ollama_model_entry.setFixedWidth(200)
+        self._form_row(group, "Ollama 模型", self._ollama_model_entry,
+                       hint_text="本地 LLM 模型名，默认 qwen3:1.7b")
 
         self._auto_summary_combo = QComboBox()
         self._auto_summary_combo.addItems(["转写后自动生成", "关闭", "手动触发"])
@@ -687,6 +703,12 @@ class SettingsPage(QWidget):
             idx = self._ollama_combo.findText(ollama)
             if idx >= 0:
                 self._ollama_combo.setCurrentIndex(idx)
+        if hasattr(self, '_ollama_url_entry'):
+            self._ollama_url_entry.setText(
+                self._config.get("ollama_url", "http://localhost:11434/v1"))
+        if hasattr(self, '_ollama_model_entry'):
+            self._ollama_model_entry.setText(
+                self._config.get("ollama_model", "qwen3:1.7b"))
         if hasattr(self, '_auto_summary_combo'):
             summary = self._config.get("auto_summary", "转写后自动生成")
             if isinstance(summary, bool):
@@ -732,6 +754,10 @@ class SettingsPage(QWidget):
             self._config.set("ai_access_mode", self._access_mode_combo.currentText())
         if hasattr(self, '_ollama_combo'):
             self._config.set("ollama_enabled", self._ollama_combo.currentText())
+        if hasattr(self, '_ollama_url_entry'):
+            self._config.set("ollama_url", self._ollama_url_entry.text().strip())
+        if hasattr(self, '_ollama_model_entry'):
+            self._config.set("ollama_model", self._ollama_model_entry.text().strip())
         if hasattr(self, '_auto_summary_combo'):
             self._config.set("auto_summary", self._auto_summary_combo.currentText())
         if hasattr(self, '_auto_correction_combo'):

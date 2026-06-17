@@ -29,6 +29,17 @@ from gui.styles import (
 logger = logging.getLogger("MeetScribe")
 
 
+def _middle_third_window(start_ms, end_ms):
+    """SPK-007: 返回发言段"中间 1/3"的时间窗口（毫秒）。
+
+    将 [start_ms, end_ms] 三等分，取中间一段。该窗口去除发言起止处
+    最容易混入静音/其他说话人的部分，质量最高。
+    """
+    length = end_ms - start_ms
+    third = length / 3.0
+    return start_ms + third, end_ms - third
+
+
 class PreviewDialog(QDialog):
     """转写结果预览弹窗"""
 
@@ -630,6 +641,7 @@ class SpeakerDialog(QDialog):
         logger.info(f"[DIALOG] 接受匹配建议: {name}")
 
     def _extract_middle_segment_embedding(self, spk_id, duration_sec=5):
+        # duration_sec 保留参数仅作兼容；SPK-007 实际取最长发言"中间 1/3"。
         if not self._audio_path or not self._sentences:
             return None
 
@@ -654,17 +666,8 @@ class SpeakerDialog(QDialog):
 
         segments_sorted = sorted(speaker_segments, key=lambda s: s['end'] - s['start'], reverse=True)
         best = segments_sorted[0]
-        seg_ms = best['end'] - best['start']
-        target_ms = duration_sec * 1000
-
-        if seg_ms >= target_ms * 2:
-            center = (best['start'] + best['end']) / 2
-            start_ms = center - target_ms / 2
-            end_ms = center + target_ms / 2
-        elif seg_ms >= target_ms:
-            start_ms, end_ms = best['start'], best['end']
-        else:
-            start_ms, end_ms = best['start'], best['end']
+        # SPK-007: 取最长发言的"中间 1/3"作为声纹片段。
+        start_ms, end_ms = _middle_third_window(best['start'], best['end'])
 
         try:
             audio_data, sr = sf.read(self._audio_path)
@@ -812,7 +815,7 @@ class MergeOrderDialog(QDialog):
         """)
         layout.addWidget(title)
 
-        subtitle = QLabel("拖动或使用按钮调整文件顺序，排在前面的文件会先转写")
+        subtitle = QLabel("使用上移/下移按钮调整文件顺序，排在前面的文件会先转写")
         subtitle.setStyleSheet(f"color: {C_TXT3}; font-size: 11px;")
         layout.addWidget(subtitle)
 
@@ -907,75 +910,6 @@ class MergeOrderDialog(QDialog):
         if self._on_confirm:
             self._on_confirm(self._items)
         self.accept()
-
-
-class TranscriptionCompleteDialog(QDialog):
-    """转写完成弹窗"""
-
-    def __init__(self, parent, success_count, fail_count, output_dir):
-        super().__init__(parent)
-        self.setWindowTitle("转写完成")
-        self.setMinimumSize(400, 250)
-        self.setModal(True)
-        self._output_dir = output_dir
-
-        self._build(success_count, fail_count)
-
-    def _build(self, success_count, fail_count):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
-
-        # 标题
-        title = QLabel("✓ 转写完成")
-        title.setStyleSheet(f"""
-            QLabel {{ color: {C_SUCCESS}; font-family: {FONT_FAMILY};
-                font-size: 18px; font-weight: bold; }}
-        """)
-        layout.addWidget(title)
-
-        # 信息卡片
-        info_card = QFrame()
-        info_card.setStyleSheet(f"""
-            QFrame {{ background: {C_CARD}; border-radius: 8px; border: 1px solid {C_BORDER}; }}
-        """)
-        info_layout = QVBoxLayout(info_card)
-        info_layout.setContentsMargins(16, 12, 16, 12)
-
-        info_layout.addWidget(QLabel(f"成功: {success_count} 个文件"))
-        if fail_count:
-            fail_lbl = QLabel(f"失败: {fail_count} 个文件")
-            fail_lbl.setStyleSheet(f"color: {C_ERROR};")
-            info_layout.addWidget(fail_lbl)
-        info_layout.addWidget(QLabel(f"输出目录: {self._output_dir}"))
-        layout.addWidget(info_card)
-
-        # 按钮
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-
-        open_btn = QPushButton("打开输出目录")
-        open_btn.setStyleSheet(f"""
-            QPushButton {{ background-color: {C_ACCENT}; color: white;
-                border: none; border-radius: 6px; padding: 8px 16px; }}
-        """)
-        open_btn.clicked.connect(self._open_output_dir)
-        btn_row.addWidget(open_btn)
-
-        close_btn = QPushButton("关闭")
-        close_btn.setStyleSheet(f"""
-            QPushButton {{ background-color: transparent; color: {C_TXT2};
-                border: 1px solid {C_BORDER}; border-radius: 6px; padding: 8px 16px; }}
-        """)
-        close_btn.clicked.connect(self.accept)
-        btn_row.addWidget(close_btn)
-
-        layout.addLayout(btn_row)
-
-    def _open_output_dir(self):
-        import subprocess
-        if os.path.exists(self._output_dir):
-            subprocess.Popen(["explorer", self._output_dir])
 
 
 def parse_speakers_from_result(result_path, saved_names=None):

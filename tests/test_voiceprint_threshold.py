@@ -69,8 +69,7 @@ def main():
     """独立运行的阈值诊断脚本（需要 funasr + CAM++ 模型文件，非自动化单测）。
 
     注意：本文件是手动诊断脚本，不含 pytest 用例。以前在模块顶层直接执行并重定向
-    sys.stdout，会关闭 pytest 的捕获缓冲、导致整个 test session 崩溃，因此改为仅在
-    __main__ 下运行。
+    sys.stdout，会关闭 pytest 捕获缓冲、导致整个 test session 崩溃，故改为仅 __main__ 运行。
     """
     from voiceprint import VoiceprintLibrary
 
@@ -123,11 +122,9 @@ def main():
     print("\n[Step 3] 分析匹配效果...")
     print("-" * 70)
 
-    # 同一说话人不同录音
     same_speaker_sim = cosine_similarity(embeddings["speaker1_a"], embeddings["speaker1_b"])
     print(f"同一说话人 (speaker1_a vs speaker1_b): {same_speaker_sim:.4f}")
 
-    # 不同说话人
     diff_speaker_sim = cosine_similarity(embeddings["speaker1_a"], embeddings["speaker2_a"])
     print(f"不同说话人 (speaker1_a vs speaker2_a): {diff_speaker_sim:.4f}")
 
@@ -139,27 +136,18 @@ def main():
 
     thresholds = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
     for thr in thresholds:
-        # 同一说话人应该匹配
         same_match = same_speaker_sim >= thr
-        # 不同说话人应该不匹配
         diff_match = diff_speaker_sim >= thr
-
-        correct = 1 if same_match else 0  # 正确匹配同一人
-        miss = 0 if same_match else 1     # 漏识（同一人未匹配）
-        false_accept = 1 if diff_match else 0  # 误识（不同人误匹配）
-
+        miss = 0 if same_match else 1
+        false_accept = 1 if diff_match else 0
         print(f"{thr:>10.2f} | {'✓' if same_match else '✗':>10} | {'✗' if miss else '✓':>10} | {'✗' if false_accept else '✓':>10}")
 
     # 5. 推荐阈值
     print("\n[Step 5] 推荐阈值...")
     print("-" * 70)
-
-    # 找到最佳阈值：能正确匹配同一人，同时不误匹配不同人
     best_thr = None
     for thr in thresholds:
-        same_match = same_speaker_sim >= thr
-        diff_match = diff_speaker_sim >= thr
-        if same_match and not diff_match:
+        if (same_speaker_sim >= thr) and not (diff_speaker_sim >= thr):
             best_thr = thr
             break
 

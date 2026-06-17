@@ -277,6 +277,9 @@ class TranscriptionHandler(QObject):
         else:
             logger.warning("[VOICEPRINT] No speaker embeddings received, skipping match")
 
+        # 发言人姓名提取（AI-003）：声纹 confirmed > 姓名提取 > 保留 Speaker N
+        self._apply_speaker_names()
+
         # 清理资源
         try:
             if self._process:
@@ -326,8 +329,7 @@ class TranscriptionHandler(QObject):
                 logger.debug("[VOICEPRINT] No valid speaker embeddings extracted")
                 return
 
-            # 第一阶段：收集所有匹配结果。match() 返回 (name, score)，
-            # 由 score 与 HIGH_CONFIDENCE 推导 confirmed/suggested 置信度。
+            # 第一阶段：收集所有匹配结果
             all_matches = []
             for speaker_id, embedding in speaker_embeddings.items():
                 name, score = library.match(embedding)
@@ -339,24 +341,17 @@ class TranscriptionHandler(QObject):
 
             if not all_matches:
                 logger.debug("[VOICEPRINT] No matches found")
-                self.log_message.emit("音色库匹配: 未找到匹配的说话人")
                 return
 
-            # 第二阶段：冲突检测 — 对每个音色库成员，只保留 score 最高的说话人
+            # 第二阶段：冲突检测 — 对每个音色库成员，只保留 score 最高的
             best_by_name = {}
             for speaker_id, name, confidence, score, embedding in all_matches:
                 if name not in best_by_name or score > best_by_name[name][2]:
                     best_by_name[name] = (speaker_id, confidence, score, embedding)
 
-            # 第三阶段：写入映射，并记录匹配结果（供 UI / 日志使用）
-            matched_count = 0
+            # 第三阶段：写入映射
             for name, (speaker_id, confidence, score, embedding) in best_by_name.items():
                 self._apply_voiceprint_match(name, speaker_id, confidence, embedding, library)
-                self._voiceprint_match_results[speaker_id] = {
-                    "name": name,
-                    "confidence": confidence,
-                }
-                matched_count += 1
 
             # 记录未写入的匹配（供日志和后续确认）
             written_ids = {v[0] for v in best_by_name.values()}
@@ -365,79 +360,51 @@ class TranscriptionHandler(QObject):
                     logger.info(f"[VOICEPRINT] Skipped conflict: Speaker {speaker_id+1} -> {name} "
                               f"(score={score:.3f}, lower than best match)")
 
-            if matched_count > 0:
-                logger.info(f"[VOICEPRINT] Matched {matched_count} speakers")
-                self.log_message.emit(f"音色库匹配完成: {matched_count} 位说话人已识别")
-
-        except ImportError:
-            logger.debug("Voiceprint module not available, skipping matching")
         except Exception as e:
-            logger.error(f"Voiceprint matching failed: {e}", exc_info=True)
+            logger.error(f"Voiceprint matching failed: {e}")
 
     def _apply_voiceprint_match(self, name, speaker_id, confidence, embedding, library):
-        """将单个说话人的匹配结果写入文件，confirmed 级别回写声纹样本。
+        """将单个说话人的匹配结果写入文件，并记录到 _voiceprint_match_results。
 
-        注意：confirmed 自动追加声纹与文件回写解耦——即使当前批次没有匹配到
-        已完成文件项，confirmed 仍应回写音色库（自动样本积累不依赖磁盘文件存在）。
+        匹配记录会先行写入 self._voiceprint_match_results（供摘要注入 AI-006 使用），
+        即使后续写文件或自动追加声纹样本失败，匹配结果仍然保留。
         """
-        applied_to_file = False
+        # 记录匹配结果（供摘要注入与姓名提取优先级判断使用）
+        self._voiceprint_match_results[speaker_id] = {
+            "name": name,
+            "confidence": confidence,
+        }
         try:
             if self._app and hasattr(self._app, 'file_manager'):
                 for item in self._app.file_manager.files:
-                    if item.status != FileStatus.DONE or not item.result_path:
-                        continue
-                    if item.file_path not in self._current_batch_paths:
-                        continue
-                    str_mapping = item.speaker_names or {}
-                    str_key = str(speaker_id + 1)
-                    str_mapping[str_key] = name
-                    self._app.file_manager.update_speaker_names(item.file_path, str_mapping)
-                    if os.path.exists(item.result_path):
-                        apply_speaker_mapping(item.result_path, {speaker_id + 1: name})
-                        summary_path = get_summary_path(item.result_path)
-                        if summary_path and os.path.exists(summary_path):
-                            apply_speaker_mapping(summary_path, {speaker_id + 1: name})
-                    self.log_message.emit(
-                        f"音色库匹配: Speaker {speaker_id + 1} -> {name} ({confidence})"
-                    )
-                    applied_to_file = True
-
-                    # confirmed 级别自动追加声纹样本
-                    if confidence == "confirmed":
-                        self._auto_add_speaker(
-                            library, name, embedding, speaker_id,
-                            source=getattr(item, 'file_name', None),
+                    if item.status == FileStatus.DONE and item.result_path:
+                        if item.file_path not in self._current_batch_paths:
+                            continue
+                        str_mapping = item.speaker_names or {}
+                        str_key = str(speaker_id + 1)
+                        str_mapping[str_key] = name
+                        self._app.file_manager.update_speaker_names(
+                            item.file_path, str_mapping
                         )
+                        if os.path.exists(item.result_path):
+                            apply_speaker_mapping(item.result_path, {speaker_id + 1: name})
+                            summary_path = get_summary_path(item.result_path)
+                            if summary_path and os.path.exists(summary_path):
+                                apply_speaker_mapping(summary_path, {speaker_id + 1: name})
+
+                        self.log_message.emit(
+                            f"音色库匹配: Speaker {speaker_id + 1} -> {name} ({confidence})"
+                        )
+
+                        # confirmed 级别自动追加声纹样本
+                        if confidence == "confirmed":
+                            quality = self._speaker_qualities.get(speaker_id, DEFAULT_SPK_QUALITY)
+                            source_name = getattr(item, 'file_name', 'auto_match')
+                            library.add_speaker(name, embedding,
+                                source=source_name, quality=quality)
+                            logger.info(f"自动添加声纹样本: {name}")
         except Exception as e:
             logger.error(f"Apply voiceprint match failed: {e}")
-
-        # 即使没有匹配到当前批次文件，confirmed 仍回写音色库（样本积累）
-        if confidence == "confirmed" and not applied_to_file:
-            self._auto_add_speaker(library, name, embedding, speaker_id, source=None)
-
-    def _auto_add_speaker(self, library, name, embedding, speaker_id, source=None):
-        """confirmed 级别回写声纹样本（异常不应中断匹配流程）。"""
-        try:
-            quality = self._speaker_qualities.get(speaker_id, DEFAULT_SPK_QUALITY)
-            library.add_speaker(
-                name, embedding,
-                source=source or self._resolve_voiceprint_source(),
-                quality=quality,
-            )
-            logger.info(f"自动添加声纹样本: {name}")
-        except Exception as e:
-            logger.warning(f"自动添加声纹失败: {e}")
-
-    def _resolve_voiceprint_source(self):
-        """为自动回写的声纹样本解析 source 标识（文件名），兜底 'auto_match'。"""
-        files = []
-        if self._app and hasattr(self._app, "file_manager"):
-            files = getattr(self._app.file_manager, "files", []) or []
-        for item in files:
-            file_name = getattr(item, "file_name", None)
-            if file_name:
-                return file_name
-        return "auto_match"
 
     def _extract_speaker_embeddings(self):
         """从接收到的嵌入向量中提取每个说话人的代表向量"""
@@ -449,6 +416,92 @@ class TranscriptionHandler(QObject):
             if embedding is not None:
                 embeddings[int(spk_id)] = embedding
         return embeddings
+
+    # ══════════════════════════════════════════════════════════
+    #  Speaker Name Extraction (AI-003)
+    # ══════════════════════════════════════════════════════════
+
+    def _apply_speaker_names(self):
+        """从转写文本提取发言人真实姓名并应用到结果（AI-003）。
+
+        优先级：声纹高置信（confirmed）匹配 > 姓名提取（正则优先 + LLM 兜底）> 保留 Speaker N。
+        即：已被声纹 confirmed 命名的说话人不会被本步骤覆盖。
+        正则优先；正则无果且配置了可用 AI 服务时才走 LLM 兜底。
+        懒加载导入 SpeakerNamer，使本模块在无 funasr 环境下仍可导入。
+        """
+        try:
+            if not (self._app and hasattr(self._app, 'file_manager')):
+                return
+
+            from speaker_namer import SpeakerNamer
+            namer = SpeakerNamer()
+
+            # 已被声纹 confirmed 命名的说话人（0 基 id → 转写文本中的 1 基 Speaker 编号）
+            confirmed_ids = {
+                int(spk_id) + 1
+                for spk_id, info in (self._voiceprint_match_results or {}).items()
+                if isinstance(info, dict) and info.get("confidence") == "confirmed"
+            }
+
+            for item in self._app.file_manager.files:
+                if item.status != FileStatus.DONE or not item.result_path:
+                    continue
+                if item.file_path not in self._current_batch_paths:
+                    continue
+                if not os.path.exists(item.result_path):
+                    continue
+
+                # 读取转写文本
+                try:
+                    with open(item.result_path, "r", encoding="utf-8") as f:
+                        transcript = f.read()
+                except Exception as e:
+                    logger.warning(f"读取转写文件失败，跳过姓名提取: {e}")
+                    continue
+
+                # 收集转写中出现的 Speaker 编号（1 基），排除已被声纹 confirmed 命名的
+                speaker_ids = sorted({
+                    int(n) for n in re.findall(r'(?<!\w)Speaker\s+(\d+)(?!\w)', transcript)
+                })
+                target_ids = [str(n) for n in speaker_ids if n not in confirmed_ids]
+                if not target_ids:
+                    continue
+
+                # 正则优先；正则无果时若有可用 AI 服务则 LLM 兜底
+                ai_service = self._get_ai_service()
+                name_map = namer.extract_names(
+                    transcript, target_ids, ai_service=ai_service
+                )
+                if not name_map:
+                    continue
+
+                # 转为 {int(1 基编号): 姓名}，再次过滤 confirmed 说话人
+                int_mapping = {
+                    int(sid): name
+                    for sid, name in name_map.items()
+                    if name and int(sid) not in confirmed_ids
+                }
+                if not int_mapping:
+                    continue
+
+                # 应用到转写结果与摘要文件
+                apply_speaker_mapping(item.result_path, int_mapping)
+                summary_path = get_summary_path(item.result_path)
+                if summary_path and os.path.exists(summary_path):
+                    apply_speaker_mapping(summary_path, int_mapping)
+
+                # 合并写入说话人映射（保留已有的声纹命名）
+                str_mapping = item.speaker_names or {}
+                for sid, name in int_mapping.items():
+                    str_mapping[str(sid)] = name
+                self._app.file_manager.update_speaker_names(item.file_path, str_mapping)
+
+                self.log_message.emit(
+                    "姓名提取: "
+                    + ", ".join(f"Speaker {k}→{v}" for k, v in int_mapping.items())
+                )
+        except Exception as e:
+            logger.error(f"发言人姓名提取失败: {e}", exc_info=True)
 
     # ══════════════════════════════════════════════════════════
     #  AI Service
@@ -470,11 +523,14 @@ class TranscriptionHandler(QObject):
 
             try:
                 from ai_service import AIService
+                # 透传 Ollama 本地 LLM 配置（地址 / 模型），供姓名提取等本地路径使用（AI-005 / SET-016）
                 self._ai_service = AIService(
                     vendor=vendor or "小米",
                     model=self._app.config.get("ai_model", "mimo-v2.5"),
                     access_mode=self._app.config.get("ai_access_mode", "按量计费"),
                     api_key=api_key,
+                    ollama_url=self._app.config.get("ollama_url", None),
+                    ollama_model=self._app.config.get("ollama_model", None),
                 )
             except Exception as e:
                 logger.error(f"Failed to init AIService: {e}")
