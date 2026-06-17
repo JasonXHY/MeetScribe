@@ -328,7 +328,8 @@ class SpeakerDialog(QDialog):
                  audio_path=None, sentences=None):
         super().__init__(parent)
         self.setWindowTitle("发言人管理")
-        self.setMinimumSize(540, 600)
+        self.setMinimumSize(820, 560)
+        self.resize(900, 600)
         self.setModal(True)
 
         self._file_name = file_name
@@ -345,8 +346,8 @@ class SpeakerDialog(QDialog):
 
     def _build(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
 
         # 标题
         title = QLabel("发言人管理")
@@ -463,7 +464,7 @@ class SpeakerDialog(QDialog):
 
         for i, s in enumerate(self._speakers):
             row = QHBoxLayout()
-            row.setSpacing(6)
+            row.setSpacing(10)
 
             color_label = QLabel()
             color_label.setFixedSize(12, 12)
@@ -493,11 +494,11 @@ class SpeakerDialog(QDialog):
                 combo = QComboBox()
                 combo.addItem("（从音色库选择）")
                 combo.addItems(voiceprint_names)
-                combo.setFixedWidth(140)
+                combo.setFixedWidth(150)
                 combo.setStyleSheet(f"""
                     QComboBox {{
                         border: 1px solid {C_BORDER}; border-radius: 4px;
-                        padding: 2px 4px; font-family: {FONT_FAMILY}; font-size: 11px;
+                        padding: 2px 6px; font-family: {FONT_FAMILY}; font-size: 12px;
                         background-color: {C_BG};
                     }}
                     QComboBox::drop-down {{
@@ -517,10 +518,14 @@ class SpeakerDialog(QDialog):
             row.addWidget(pct_label)
 
             save_btn = QPushButton("保存到音色库")
-            save_btn.setFixedSize(100, 28)
+            save_btn.setFixedSize(120, 28)
             save_btn.setStyleSheet(f"""
-                QPushButton {{ background-color: {C_ACCENT}; color: white;
-                    border: none; border-radius: 4px; font-size: 11px; }}
+                QPushButton {{
+                    background-color: {C_ACCENT}; color: white;
+                    border: none; border-radius: 4px; font-size: 12px;
+                    padding: 0 10px;
+                    min-height: 0px;
+                }}
             """)
             save_btn.clicked.connect(lambda checked, idx=i: self._save_to_library(idx))
             row.addWidget(save_btn)
@@ -616,14 +621,18 @@ class SpeakerDialog(QDialog):
         confidence_pct = int(score * 100)
 
         suggestion_label = QLabel(f"可能是 {matched_name} ({confidence_pct}%)")
-        suggestion_label.setStyleSheet(f"color: #0067C0; font-size: 11px;")
+        suggestion_label.setStyleSheet(f"QLabel {{ color: {C_ACCENT}; font-size: 12px; font-weight: 500; }}")
         layout.addWidget(suggestion_label)
 
         accept_btn = QPushButton("接受")
-        accept_btn.setFixedSize(40, 20)
+        accept_btn.setFixedSize(60, 28)
         accept_btn.setStyleSheet(f"""
-            QPushButton {{ background-color: {C_ACCENT}; color: white;
-                border: none; border-radius: 3px; font-size: 10px; }}
+            QPushButton {{
+                background-color: {C_ACCENT}; color: white;
+                border: none; border-radius: 4px; font-size: 12px;
+                padding: 0 8px;
+                min-height: 0px;
+            }}
         """)
         accept_btn.clicked.connect(lambda: self._accept_suggestion(
             name_entry, matched_name, suggestion_label, accept_btn

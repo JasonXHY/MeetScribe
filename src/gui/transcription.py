@@ -521,11 +521,24 @@ class TranscriptionHandler(QObject):
             if not api_key:
                 return None
 
+            # 厂商名规范化：旧版 "小米" → 新版 "小米 MiMo"
+            vendor_map = {
+                "小米": "小米 MiMo",
+                "智谱": "智谱 AI",
+                "阿里": "阿里巴巴",
+                "腾讯": "腾讯混元",
+                "百度": "百度文心",
+                "月之暗面": "月之暗面 Kimi",
+                "讯飞": "讯飞星火",
+                "百川": "百川智能",
+            }
+            vendor = vendor_map.get(vendor, vendor)
+
             try:
                 from ai_service import AIService
                 # 透传 Ollama 本地 LLM 配置（地址 / 模型），供姓名提取等本地路径使用（AI-005 / SET-016）
                 self._ai_service = AIService(
-                    vendor=vendor or "小米",
+                    vendor=vendor or "小米 MiMo",
                     model=self._app.config.get("ai_model", "mimo-v2.5"),
                     access_mode=self._app.config.get("ai_access_mode", "按量计费"),
                     api_key=api_key,

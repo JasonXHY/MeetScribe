@@ -246,7 +246,32 @@ class SettingsPage(QWidget):
         api_key_container = QWidget()
         api_key_container.setLayout(api_key_inner)
         api_key_container.setStyleSheet("background: transparent; border: none;")
+
+        # API Key 状态提示
+        has_user_key = bool(self._config.get("ai_user_api_key", "")) if self._config else False
+        has_default_key = bool(self._config.get("ai_default_api_key", "")) if self._config else False
+        if has_user_key:
+            api_key_hint = "已配置自定义 Key"
+        elif has_default_key:
+            api_key_hint = "使用内置 Key（不可查看）"
+        else:
+            api_key_hint = "未配置 API Key，AI 功能不可用"
+
+        self._api_key_hint = QLabel(api_key_hint)
+        hint_color = C_SUCCESS if has_user_key else C_TXT3
+        self._api_key_hint.setStyleSheet(f"""
+            QLabel {{
+                color: {hint_color};
+                font-family: {FONT_FAMILY};
+                font-size: 10px;
+                background: transparent;
+                border: none;
+                padding-left: 108px;
+            }}
+        """)
         self._form_row(group, "API Key", api_key_container)
+        # 在 form_row 之后添加提示
+        group.layout().addWidget(self._api_key_hint)
 
         self._access_mode_combo = QComboBox()
         self._access_mode_combo.addItems(["按量计费", "Token Plan"])

@@ -318,6 +318,98 @@ class AddVoiceDialog(QDialog):
         super().closeEvent(event)
 
 
+class SpeakerItemWidget(QWidget):
+    """说话人列表项 — 自管理选中/hover 背景色，绕过 Qt setItemWidget QSS 冲突"""
+
+    clicked = Signal()  # 点击信号
+
+    def __init__(self, name, sample_count, color, parent=None):
+        super().__init__(parent)
+        self._selected = False
+        self._name = name
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(10)
+
+        # 彩色圆形头像
+        avatar = QLabel(name[0] if name else "?")
+        avatar.setFixedSize(32, 32)
+        avatar.setAlignment(Qt.AlignCenter)
+        avatar.setStyleSheet(f"""
+            QLabel {{
+                background-color: {color};
+                color: white; border-radius: 16px;
+                font-size: 13px; font-weight: bold;
+            }}
+        """)
+        layout.addWidget(avatar)
+
+        # 名字 + 样本数
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(2)
+        name_lbl = QLabel(name)
+        name_lbl.setStyleSheet(
+            f"QLabel {{ color: {C_TXT1}; font-size: 13px; font-weight: 500;"
+            " background: transparent; border: none; }}"
+        )
+        info_layout.addWidget(name_lbl)
+        meta_lbl = QLabel(f"{sample_count} 个样本")
+        meta_lbl.setStyleSheet(
+            f"QLabel {{ color: {C_TXT3}; font-size: 11px;"
+            " background: transparent; border: none; }}"
+        )
+        info_layout.addWidget(meta_lbl)
+        layout.addLayout(info_layout)
+        layout.addStretch()
+
+        self._apply_style()
+
+    def set_selected(self, selected):
+        """切换选中状态"""
+        if self._selected != selected:
+            self._selected = selected
+            self._apply_style()
+
+    def enterEvent(self, event):
+        if not self._selected:
+            self.setStyleSheet("""
+                SpeakerItemWidget {
+                    background-color: #F9FAFB;
+                    border-radius: 6px;
+                }
+            """)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if not self._selected:
+            self._apply_style()
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        """点击时发送选中信号"""
+        self.clicked.emit()
+        super().mousePressEvent(event)
+
+    def _apply_style(self):
+        if self._selected:
+            self.setStyleSheet(f"""
+                SpeakerItemWidget {{
+                    background-color: {C_ACCENT_LT};
+                    border-radius: 6px;
+                    border-left: 3px solid {C_ACCENT};
+                }}
+            """)
+        else:
+            self.setStyleSheet("""
+                SpeakerItemWidget {
+                    background-color: transparent;
+                    border-radius: 6px;
+                    border-left: 3px solid transparent;
+                }
+            """)
+
+
 class VoiceprintPage(QWidget):
     """音色库管理页面"""
 
@@ -430,16 +522,18 @@ class VoiceprintPage(QWidget):
                 outline: none;
             }}
             QListWidget::item {{
-                padding: 10px 12px;
+                padding: 0px;
                 border-radius: 6px;
-                margin: 0 4px 2px 4px;
+                margin: 1px 4px;
                 border: none;
+                background: transparent;
             }}
             QListWidget::item:selected {{
-                background-color: {C_ACCENT_LT}; color: {C_TXT1};
+                background: transparent;
+                color: {C_TXT1};
             }}
             QListWidget::item:hover {{
-                background-color: #F9FAFB;
+                background: transparent;
             }}
         """)
         self._speaker_list.currentItemChanged.connect(self._on_speaker_select)
@@ -532,41 +626,22 @@ class VoiceprintPage(QWidget):
                 return
 
             for name, profile in speakers.items():
-                # 创建带彩色头像的自定义widget
-                item_widget = QWidget()
-                item_layout = QHBoxLayout(item_widget)
-                item_layout.setContentsMargins(10, 10, 10, 10)
-                item_layout.setSpacing(10)
-
-                # 彩色圆形头像
-                avatar = QLabel(name[0] if name else "?")
-                avatar.setFixedSize(32, 32)
-                avatar.setAlignment(Qt.AlignCenter)
                 color_idx = hash(name) % len(SPEAKER_COLORS)
-                avatar.setStyleSheet(f"""
-                    background-color: {SPEAKER_COLORS[color_idx]};
-                    color: white; border-radius: 16px;
-                    font-size: 13px; font-weight: bold;
-                """)
-                item_layout.addWidget(avatar)
+                color = SPEAKER_COLORS[color_idx]
+                sample_count = len(profile.embeddings)
 
-                # 名字 + 样本数
-                info_layout = QVBoxLayout()
-                info_layout.setSpacing(1)
-                name_lbl = QLabel(name)
-                name_lbl.setStyleSheet(f"color: {C_TXT1}; font-size: 13px; font-weight: 500; background: transparent; border: none;")
-                info_layout.addWidget(name_lbl)
-                meta_lbl = QLabel(f"{len(profile.embeddings)} 个样本")
-                meta_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
-                info_layout.addWidget(meta_lbl)
-                item_layout.addLayout(info_layout)
-                item_layout.addStretch()
+                item_widget = SpeakerItemWidget(name, sample_count, color)
 
                 list_item = QListWidgetItem()
-                list_item.setSizeHint(QSize(0, 52))
+                list_item.setSizeHint(QSize(0, 56))
                 list_item.setData(Qt.UserRole, name)
                 self._speaker_list.addItem(list_item)
                 self._speaker_list.setItemWidget(list_item, item_widget)
+
+                # 点击 widget 时自动选中对应 item
+                item_widget.clicked.connect(
+                    lambda item=list_item: self._speaker_list.setCurrentItem(item)
+                )
 
             total_samples = sum(len(p.embeddings) for p in speakers.values())
             self._count_label.setText(f"共 {len(speakers)} 个说话人，{total_samples} 个样本")
@@ -584,8 +659,17 @@ class VoiceprintPage(QWidget):
             item.setHidden(text != "" and text not in name.lower())
 
     def _on_speaker_select(self, current, previous):
-        """选中说话人"""
+        """选中说话人 — 更新高亮状态"""
+        # 取消上一个选中项的高亮
+        if previous:
+            prev_widget = self._speaker_list.itemWidget(previous)
+            if prev_widget and hasattr(prev_widget, 'set_selected'):
+                prev_widget.set_selected(False)
+        # 设置当前选中项的高亮
         if current:
+            curr_widget = self._speaker_list.itemWidget(current)
+            if curr_widget and hasattr(curr_widget, 'set_selected'):
+                curr_widget.set_selected(True)
             name = current.data(Qt.UserRole)
             self._selected_speaker = name
             self._show_speaker_detail(name)
