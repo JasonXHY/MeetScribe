@@ -132,6 +132,10 @@ class TranscriptionHandler(QObject):
         self._speaker_qualities = {}
         self._sentences = []
 
+        # 从配置读取输出目录（如果未指定）
+        if not task.out_dir and self._app and hasattr(self._app, 'config'):
+            task.out_dir = self._app.config.get("transcript_dir", "")
+
         # 启动多进程转写
         device = "cpu"
         if self._app and hasattr(self._app, 'config'):
