@@ -227,8 +227,10 @@ class TestModelManagement:
         assert hasattr(page, '_btn_download_models')
 
     def test_model_status_frame_exists(self, config, app):
+        # T-G17: PySide6 实现用 QLabel 承载状态，不存在独立 frame。
+        # 断言真实存在的 _model_status_label（设计无 frame）。
         page = _create_settings_page(config)
-        assert hasattr(page, '_model_status_frame')
+        assert hasattr(page, '_model_status_label')
 
     def test_model_status_label_exists(self, config, app):
         page = _create_settings_page(config)
