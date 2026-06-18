@@ -11,6 +11,7 @@ import sys
 import json
 import math
 import time
+import html
 import logging
 import subprocess
 import tempfile
@@ -1348,10 +1349,11 @@ class Transcriber:
         paragraphs = self._merge_consecutive(sentences, gap_ms=3000)
         body_lines = []
         for p in paragraphs:
-            label = self._spk_label(p["spk"], names)
+            # 转义动态内容，防止正文中的 < > & 破坏标签结构或注入脚本。
+            label = html.escape(self._spk_label(p["spk"], names))
             color = self._spk_color(p["spk"])
             t = self._ms_to_time(p["start"])
-            text = " ".join(p["texts"])
+            text = html.escape(" ".join(p["texts"]))
             body_lines.append(
                 f'  <div class="para">'
                 f'<span class="spk" style="color:{color}">{label}</span>'
@@ -1361,6 +1363,7 @@ class Transcriber:
 
         body = "\n".join(body_lines)
         total_speakers = len({s["spk"] for s in sentences if s["spk"] >= 0})
+        filename = html.escape(filename)
 
         return f"""<!DOCTYPE html>
 <html lang="zh-CN">
