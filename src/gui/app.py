@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
     QLabel, QFrame, QTextEdit, QStatusBar
 )
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QIcon
 
 from gui.styles import (
@@ -82,6 +82,9 @@ class GUILogHandler(logging.Handler):
 class MeetScribeApp(QMainWindow):
     """主窗口"""
 
+    # 跨线程信号：后台线程通过此信号通知主线程执行操作
+    stop_complete_signal = Signal(list)
+
     def __init__(self):
         try:
             super().__init__()
@@ -134,6 +137,8 @@ class MeetScribeApp(QMainWindow):
             self.recorder.on_state_change = self._on_recorder_state_change
             self.recorder.on_save = self._on_recorder_save
             self.recorder.on_stop_complete = self._on_recorder_stop_complete
+            # 信号槽连接：后台线程通过信号安全通知主线程
+            self.stop_complete_signal.connect(self._handle_stop_complete)
             logger.debug("UnifiedRecorder initialized with callbacks")
 
             # 转写调度器
@@ -174,6 +179,9 @@ class MeetScribeApp(QMainWindow):
 
             # 连接设置变更信号
             self._settings_page.settings_changed.connect(self._on_settings_changed)
+
+            # 连接转写调度器的刷新信号（需在 _home_page 创建后）
+            self._transcription_handler.refresh_needed.connect(self._home_page.refresh_file_list)
 
             # 状态栏
             status_frame = QFrame()
@@ -339,8 +347,8 @@ class MeetScribeApp(QMainWindow):
         logger.info(f"Audio file saved: {file_path} (duration={duration_s:.1f}s)" if duration_s else f"Audio file saved: {file_path}")
 
     def _on_recorder_stop_complete(self, saved_files):
-        """后台保存完成后回调"""
-        QTimer.singleShot(0, lambda: self._handle_stop_complete(saved_files))
+        """后台保存完成后回调（从后台线程调用，通过信号安全通知主线程）"""
+        self.stop_complete_signal.emit(saved_files)
 
     def _handle_stop_complete(self, saved_files):
         """录音停止后处理：添加文件到列表、合并双轨、询问转写（主线程执行）"""

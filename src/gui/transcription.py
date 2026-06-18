@@ -33,6 +33,7 @@ class TranscriptionHandler(QObject):
     file_status_changed = Signal(str, object)  # file_path, FileStatus
     transcription_done = Signal(int, int)  # success_count, fail_count
     progress_updated = Signal(object)
+    refresh_needed = Signal()  # 通知主线程刷新文件列表
 
     def __init__(self, app=None):
         super().__init__()
@@ -618,7 +619,7 @@ class TranscriptionHandler(QObject):
 
                 # 主题更新后刷新文件列表
                 if topic and self._app and hasattr(self._app, '_home_page'):
-                    QTimer.singleShot(0, self._app._home_page.refresh_file_list)
+                    self.refresh_needed.emit()
 
                 # 提取参会人员映射
                 speaker_mapping = self._extract_speaker_mapping_from_summary(summary)
