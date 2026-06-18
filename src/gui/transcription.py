@@ -616,6 +616,10 @@ class TranscriptionHandler(QObject):
                             self.log_message.emit(f"会议主题: {topic}")
                             break
 
+                # 主题更新后刷新文件列表
+                if topic and self._app and hasattr(self._app, '_home_page'):
+                    QTimer.singleShot(0, self._app._home_page.refresh_file_list)
+
                 # 提取参会人员映射
                 speaker_mapping = self._extract_speaker_mapping_from_summary(summary)
                 if speaker_mapping and self._app and hasattr(self._app, 'file_manager'):

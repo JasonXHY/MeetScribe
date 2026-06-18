@@ -456,6 +456,8 @@ class HomePage(QWidget):
         )
         if reply == QMessageBox.Yes:
             self._transcribe_single(file_path)
+        # 确保文件列表在弹窗关闭后刷新
+        self.refresh_file_list()
 
     # ══════════════════════════════════════════════════════════
     #  File Management
