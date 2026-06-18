@@ -341,15 +341,28 @@ class TranscriptionHandler(QObject):
             # 第一阶段：收集所有匹配结果
             all_matches = []
             for speaker_id, embedding in speaker_embeddings.items():
+                # 详细日志：打印与每个音色库成员的匹配分数
+                import numpy as np
+                emb_array = np.array(embedding) if not isinstance(embedding, np.ndarray) else embedding
+                logger.info(f"[VOICEPRINT] Speaker {speaker_id + 1}: embedding dim={emb_array.shape}")
+                for spk_name, profile in library.get_speakers().items():
+                    avg_emb = profile.get_weighted_embedding()
+                    if avg_emb is not None:
+                        avg_array = np.array(avg_emb)
+                        cos_sim = np.dot(emb_array, avg_array) / (np.linalg.norm(emb_array) * np.linalg.norm(avg_array))
+                        logger.info(f"[VOICEPRINT]   vs {spk_name}: cos_sim={cos_sim:.4f}")
+
                 name, score = library.match(embedding)
                 if name:
                     confidence = "confirmed" if score >= HIGH_CONFIDENCE else "suggested"
                     all_matches.append((speaker_id, name, confidence, score, embedding))
-                    logger.debug(f"[VOICEPRINT] Speaker {speaker_id + 1}: match={name}, "
+                    logger.info(f"[VOICEPRINT] Speaker {speaker_id + 1}: match={name}, "
                                f"score={score:.3f}, confidence={confidence}")
+                else:
+                    logger.info(f"[VOICEPRINT] Speaker {speaker_id + 1}: no match (best score below threshold)")
 
             if not all_matches:
-                logger.debug("[VOICEPRINT] No matches found")
+                logger.warning("[VOICEPRINT] No matches found for any speaker")
                 return
 
             # 第二阶段：冲突检测 — 对每个音色库成员，只保留 score 最高的
