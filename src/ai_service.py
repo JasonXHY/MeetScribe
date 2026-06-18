@@ -40,6 +40,7 @@ class AIService:
         api_key: str = "",
         ollama_url: str = None,
         ollama_model: str = None,
+        ollama_enabled: bool = True,
     ):
         """
         初始化 AI 服务
@@ -51,6 +52,7 @@ class AIService:
             api_key:      云端 API Key（必填才能使用摘要功能）
             ollama_url:   Ollama 服务地址，默认 http://localhost:11434/v1
             ollama_model: Ollama 模型名称，默认 qwen3:1.7b
+            ollama_enabled: 是否启用本地 Ollama LLM（默认 True）
         """
         self.vendor = vendor
         self.model = model or _DEFAULT_MODEL
@@ -58,6 +60,7 @@ class AIService:
         self.api_key = api_key
         self.base_url = self._resolve_base_url()
 
+        self.ollama_enabled = ollama_enabled
         self.ollama_url = ollama_url or _OLLAMA_DEFAULT_URL
         self.ollama_model = ollama_model or _OLLAMA_DEFAULT_MODEL
 
@@ -306,6 +309,10 @@ class AIService:
                   如果无法提取或 Ollama 不可用，返回空字典
         """
         if not speaker_ids:
+            return {}
+
+        if not self.ollama_enabled:
+            logger.info("本地 Ollama 已禁用，跳过说话人姓名提取")
             return {}
 
         use_model = model or self.ollama_model
