@@ -1110,17 +1110,22 @@ class Transcriber:
                     result = model_spk.inference(input=segment_audio)
                     if result and len(result) > 0:
                         spk_emb = result[0].get("spk_embedding")
+                        if spk_emb is None:
+                            spk_emb = result[0].get("spk_emb")
                         if spk_emb is not None:
                             # 转换为 numpy array
                             if hasattr(spk_emb, "cpu"):
                                 spk_emb = spk_emb.cpu().numpy()
-                            if hasattr(spk_emb, "tolist"):
-                                spk_emb = np.array(spk_emb.tolist())
+                            elif hasattr(spk_emb, "tolist"):
+                                spk_emb = np.array(spk_emb)
                             if isinstance(spk_emb, list):
                                 spk_emb = np.array(spk_emb)
-                            # 处理嵌套 list [[...]]
-                            if len(spk_emb.shape) > 1 and spk_emb.shape[0] == 1:
-                                spk_emb = spk_emb[0]
+                            # 关键修复：用 squeeze 去掉所有 size=1 的维度
+                            spk_emb = np.squeeze(spk_emb)
+                            # 校验最终维度（CAM++ 应为 192）
+                            if spk_emb.ndim != 1:
+                                logger.warning(f"[SPK-EMB] Unexpected dim after squeeze: {spk_emb.shape}, skipping")
+                                continue
                             spk_embeddings.append(spk_emb)
 
                 # 对该说话人的多个嵌入取平均

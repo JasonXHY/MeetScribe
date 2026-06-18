@@ -173,6 +173,9 @@ class TranscriptionHandler(QObject):
             # 使用 get_nowait() 替代 empty()，更可靠
             while True:
                 try:
+                    # 防御性检查：防止 _on_done() 在循环间隙将 queue 置 None
+                    if self._queue is None:
+                        break
                     msg = self._queue.get_nowait()
                     self._process_message(msg)
                 except queue.Empty:
@@ -643,15 +646,19 @@ class TranscriptionHandler(QObject):
         """从摘要中提取会议主题"""
         try:
             lines = summary.splitlines()
-            for line in lines[:10]:
+            for i, line in enumerate(lines[:15]):
                 line = line.strip()
-                # 匹配 "# 标题" / "## 标题" / "### 标题" 格式
-                if line.startswith("# ") or line.startswith("## ") or line.startswith("### "):
-                    topic = line.lstrip("# ").strip()
-                    if len(topic) > 5:
-                        return topic[:50]
-                # 匹配 "主题：xxx" 或 "**主题**：xxx" 格式
-                if "主题" in line:
+                # 找到"会议主题"相关的 section header，取下一行正文作为主题
+                if line.startswith("#") and ("主题" in line or "会议" in line):
+                    for j in range(i + 1, min(i + 4, len(lines))):
+                        next_line = lines[j].strip()
+                        if next_line and not next_line.startswith("#"):
+                            topic = next_line[:50]
+                            if len(topic) > 2:
+                                return topic
+                    break
+                # 兼容：直接匹配 "主题：xxx" 或 "**主题**：xxx" 格式
+                if "主题" in line and ("：" in line or ":" in line):
                     m = re.search(r'主题[：:]\s*(.+)', line)
                     if m:
                         topic = m.group(1).strip()
@@ -669,6 +676,8 @@ class TranscriptionHandler(QObject):
           - [Speaker N]姓名
           - Speaker N: 姓名
           - N. 姓名
+
+        过滤角色推断（如"（项目负责人）"、"（角色推断：XXX）"）
         """
         mapping = {}
         try:
@@ -687,6 +696,9 @@ class TranscriptionHandler(QObject):
                         if m:
                             spk_num = int(m.group(1))
                             name = m.group(2).strip()
+                            # 过滤角色推断：以括号开头的不是姓名
+                            if name and name.startswith(("（", "(", "（角色")):
+                                continue
                             if name and len(name) < 20:
                                 mapping[spk_num] = name
                                 continue
@@ -695,6 +707,8 @@ class TranscriptionHandler(QObject):
                         if m:
                             spk_num = int(m.group(1))
                             name = m.group(2).strip()
+                            if name and name.startswith(("（", "(")):
+                                continue
                             if name and len(name) < 20:
                                 mapping[spk_num] = name
                                 continue

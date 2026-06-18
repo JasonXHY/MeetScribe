@@ -60,6 +60,8 @@ def extract_speaker_mapping_from_summary(summary_text):
       - [Speaker N] 姓名
       - [Speaker N]姓名
       - Speaker N → 姓名
+
+    过滤角色推断（如"（项目负责人）"、"（角色推断：XXX）"）
     """
     mapping = {}
     # 优先匹配 [Speaker N] 姓名 格式
@@ -67,7 +69,10 @@ def extract_speaker_mapping_from_summary(summary_text):
     for m in pattern_bracket.finditer(summary_text):
         speaker_id = int(m.group(1))
         name = m.group(2).strip()
-        if name and name != f"Speaker {speaker_id}":
+        # 过滤角色推断：以括号开头的不是姓名
+        if name and name.startswith(("（", "(", "（角色")):
+            continue
+        if name and name != f"Speaker {speaker_id}" and len(name) < 20:
             mapping[speaker_id] = name
 
     # 如果没有匹配到，回退到纯 Speaker N 格式（保持向后兼容）
