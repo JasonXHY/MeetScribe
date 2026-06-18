@@ -1120,8 +1120,10 @@ class Transcriber:
                                 spk_emb = np.array(spk_emb)
                             if isinstance(spk_emb, list):
                                 spk_emb = np.array(spk_emb)
+                            logger.debug(f"[SPK-EMB] Before squeeze: type={type(spk_emb)}, shape={getattr(spk_emb, 'shape', 'N/A')}")
                             # 关键修复：用 squeeze 去掉所有 size=1 的维度
                             spk_emb = np.squeeze(spk_emb)
+                            logger.debug(f"[SPK-EMB] After squeeze: shape={spk_emb.shape}, ndim={spk_emb.ndim}")
                             # 校验最终维度（CAM++ 应为 192）
                             if spk_emb.ndim != 1:
                                 logger.warning(f"[SPK-EMB] Unexpected dim after squeeze: {spk_emb.shape}, skipping")

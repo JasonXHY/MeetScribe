@@ -55,8 +55,14 @@ def _send_embeddings(queue, transcriber):
         if embeddings:
             # 打印每个说话人的嵌入向量维度
             for spk_id, emb in embeddings.items():
-                emb_len = len(emb) if hasattr(emb, '__len__') else 'unknown'
-                logger.debug(f"[WORKER] Speaker {spk_id}: embedding dim={emb_len}")
+                # emb 是 (embedding_list, quality) 元组
+                if isinstance(emb, (tuple, list)) and len(emb) == 2:
+                    emb_list = emb[0]
+                    emb_len = len(emb_list) if hasattr(emb_list, '__len__') else 'unknown'
+                else:
+                    emb_len = len(emb) if hasattr(emb, '__len__') else 'unknown'
+                logger.debug(f"[WORKER] Speaker {spk_id}: embedding dim={emb_len}"
+                           f"{', WARN expected 192' if isinstance(emb_len, int) and emb_len != 192 else ''}")
             queue.put(("spk_embeddings", embeddings))
             logger.debug("[WORKER] Sent spk_embeddings to main process")
         else:
