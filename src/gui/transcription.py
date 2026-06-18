@@ -644,8 +644,8 @@ class TranscriptionHandler(QObject):
             lines = summary.splitlines()
             for line in lines[:10]:
                 line = line.strip()
-                # 匹配 "# 标题" 或 "## 标题" 格式
-                if line.startswith("# ") or line.startswith("## "):
+                # 匹配 "# 标题" / "## 标题" / "### 标题" 格式
+                if line.startswith("# ") or line.startswith("## ") or line.startswith("### "):
                     topic = line.lstrip("# ").strip()
                     if len(topic) > 5:
                         return topic[:50]
@@ -661,7 +661,14 @@ class TranscriptionHandler(QObject):
         return None
 
     def _extract_speaker_mapping_from_summary(self, summary):
-        """从摘要中提取参会人员映射"""
+        """从摘要中提取参会人员映射
+
+        支持多种格式：
+          - [Speaker N] 姓名
+          - [Speaker N]姓名
+          - Speaker N: 姓名
+          - N. 姓名
+        """
         mapping = {}
         try:
             lines = summary.splitlines()
@@ -674,8 +681,24 @@ class TranscriptionHandler(QObject):
                 if in_section:
                     if line.startswith("- ") or line.startswith("* "):
                         content = line.lstrip("-* ").strip()
-                        # 匹配 "Speaker N: 姓名" 或 "N. 姓名" 格式
-                        m = re.match(r'(?:Speaker\s*)?(\d+)[.:：]\s*(.+)', content)
+                        # 匹配 [Speaker N] 姓名 格式
+                        m = re.match(r'\[Speaker\s+(\d+)\]\s*(.+)', content)
+                        if m:
+                            spk_num = int(m.group(1))
+                            name = m.group(2).strip()
+                            if name and len(name) < 20:
+                                mapping[spk_num] = name
+                                continue
+                        # 匹配 Speaker N: 姓名 格式
+                        m = re.match(r'Speaker\s+(\d+)[.:：]\s*(.+)', content)
+                        if m:
+                            spk_num = int(m.group(1))
+                            name = m.group(2).strip()
+                            if name and len(name) < 20:
+                                mapping[spk_num] = name
+                                continue
+                        # 匹配 N. 姓名 格式
+                        m = re.match(r'(\d+)[.:：]\s*(.+)', content)
                         if m:
                             spk_num = int(m.group(1))
                             name = m.group(2).strip()

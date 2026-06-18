@@ -54,10 +54,27 @@ def apply_speaker_mapping(transcript_path, mapping):
 
 
 def extract_speaker_mapping_from_summary(summary_text):
-    """从摘要中提取说话人映射"""
+    """从摘要中提取说话人映射
+
+    支持多种格式：
+      - [Speaker N] 姓名
+      - [Speaker N]姓名
+      - Speaker N → 姓名
+    """
     mapping = {}
-    pattern = re.compile(r'Speaker\s+(\d+)')
-    for m in pattern.finditer(summary_text):
+    # 优先匹配 [Speaker N] 姓名 格式
+    pattern_bracket = re.compile(r'\[Speaker\s+(\d+)\]\s*(.+?)(?:\s*$|\s*\n)')
+    for m in pattern_bracket.finditer(summary_text):
         speaker_id = int(m.group(1))
-        mapping[speaker_id] = f"Speaker {speaker_id}"
+        name = m.group(2).strip()
+        if name and name != f"Speaker {speaker_id}":
+            mapping[speaker_id] = name
+
+    # 如果没有匹配到，回退到纯 Speaker N 格式（保持向后兼容）
+    if not mapping:
+        pattern_plain = re.compile(r'Speaker\s+(\d+)')
+        for m in pattern_plain.finditer(summary_text):
+            speaker_id = int(m.group(1))
+            mapping[speaker_id] = f"Speaker {speaker_id}"
+
     return mapping
