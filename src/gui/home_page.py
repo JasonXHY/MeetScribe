@@ -634,11 +634,20 @@ class HomePage(QWidget):
             logger.debug(f"[OPEN-FOLDER] Falling back to dirname(file_path): {repr(fallback)}")
             folder = fallback
 
+        # 强制使用反斜杠（Windows explorer 兼容）
+        if folder:
+            folder = os.path.normpath(folder)
+
         logger.debug(f"[OPEN-FOLDER] Final folder={repr(folder)}, exists={os.path.exists(folder) if folder else False}")
 
         if folder and os.path.exists(folder):
-            subprocess.Popen(["explorer", folder])
-            self._log(f"已打开文件夹: {folder}")
+            try:
+                os.startfile(folder)
+                self._log(f"已打开文件夹: {folder}")
+            except Exception as e:
+                logger.error(f"[OPEN-FOLDER] os.startfile failed: {e}, trying explorer")
+                subprocess.Popen(["explorer", folder])
+                self._log(f"已打开文件夹: {folder}")
         else:
             logger.warning(f"[OPEN-FOLDER] Folder does not exist: {repr(folder)}")
             self._log(f"无法打开文件夹: {folder}")
