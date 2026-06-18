@@ -115,6 +115,9 @@ class TranscriptionHandler(QObject):
             merge=merge,
         )
         self._current_batch_paths = set(file_paths)
+        # 重置声纹匹配状态（每次新转写都需要重新匹配）
+        self._voiceprint_matched = False
+        self._voiceprint_match_results = {}
 
         if self._transcribing:
             self._task_queue.add_task(task)
