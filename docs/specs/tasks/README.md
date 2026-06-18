@@ -29,11 +29,11 @@
 | [T-G11](T-G11-ui011-first-launch.md) | UI-011 | 首次启动引导真实化 | — |
 | [T-G12](T-G12-spec-deviation-fixes.md) | 多项 | 验收标准偏差批量校正 | — |
 
-## Tier 3 — 测试覆盖补强
-| 任务 | 关联需求 | 标题 | 依赖 |
-|---|---|---|---|
-| [T-G13](T-G13-rec-tests.md) | REC-001~010 | 录音链路单测 + E2E | G2 |
-| [T-G14](T-G14-trn008-format-tests.md) | TRN-008 | 多格式输出测试 | G2 |
-| [T-G15](T-G15-voiceprint-gui-tests.md) | VPR-002/003/004 | 声纹 GUI 流 E2E | G2 |
-| [T-G16](T-G16-settings-ai-spk-tests.md) | SET-007/014, AI-002, SPK-* | 设置/纠错/发言人弹窗测试 | G2 |
-| [T-G17](T-G17-fix-stale-tests.md) | 既有套件 | 修复 stale 测试 | G2 |
+## Tier 3 — 测试覆盖补强 ✅ 已完成
+| 任务 | 关联需求 | 标题 | 依赖 | 状态 |
+|---|---|---|---|---|
+| [T-G13](T-G13-rec-tests.md) | REC-001~010 | 录音链路单测 + E2E | G2 | ✅ `test_recorder.py` |
+| [T-G14](T-G14-trn008-format-tests.md) | TRN-008 | 多格式输出测试 | G2 | ✅ `test_formatters.py` |
+| [T-G15](T-G15-voiceprint-gui-tests.md) | VPR-002/003/004 | 声纹 GUI 流 E2E | G2 | ✅ `test_voiceprint_gui_flow.py` |
+| [T-G16](T-G16-settings-ai-spk-tests.md) | SET-007/014, AI-002, SPK-* | 设置/纠错/发言人弹窗测试 | G2 | ✅ `test_settings_dialogs_g16.py` + `test_ai_service.py` |
+| [T-G17](T-G17-fix-stale-tests.md) | 既有套件 | 修复 stale 测试 | G2 | ✅ 删除 `test_performance_optimization.py`（见 `tests/MIGRATION_*.md`） |
