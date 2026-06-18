@@ -619,18 +619,29 @@ class HomePage(QWidget):
         """打开转写结果所在文件夹"""
         import subprocess
 
+        logger.debug(f"[OPEN-FOLDER] Called with file_path={repr(file_path)}")
+
         folder = None
         if self._app and hasattr(self._app, 'file_manager'):
             item = self._app.file_manager.get_file(file_path)
+            logger.debug(f"[OPEN-FOLDER] get_file returned: {item}")
             if item and item.result_path:
                 folder = os.path.dirname(item.result_path)
+                logger.debug(f"[OPEN-FOLDER] Using result_path dir: {repr(folder)}")
 
         if not folder or not os.path.exists(folder):
-            folder = os.path.dirname(file_path)
+            fallback = os.path.dirname(file_path)
+            logger.debug(f"[OPEN-FOLDER] Falling back to dirname(file_path): {repr(fallback)}")
+            folder = fallback
 
-        if os.path.exists(folder):
+        logger.debug(f"[OPEN-FOLDER] Final folder={repr(folder)}, exists={os.path.exists(folder) if folder else False}")
+
+        if folder and os.path.exists(folder):
             subprocess.Popen(["explorer", folder])
             self._log(f"已打开文件夹: {folder}")
+        else:
+            logger.warning(f"[OPEN-FOLDER] Folder does not exist: {repr(folder)}")
+            self._log(f"无法打开文件夹: {folder}")
 
     def _export_result(self, file_path):
         """导出转写结果"""
