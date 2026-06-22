@@ -17,6 +17,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsndfile1
+
       - name: Install lightweight deps
         # 仅安装可在 CI 运行的轻依赖；funasr / pyaudiowpatch（重型/仅 Windows）不在 CI 安装，
         # 对应的 e2e_heavy / e2e_network 用例会自动 skip（见 tests/conftest.py）。
