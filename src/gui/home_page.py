@@ -637,6 +637,7 @@ class HomePage(QWidget):
     def _open_folder(self, file_path):
         """打开转写结果所在文件夹"""
         import subprocess
+        import sys
 
         logger.debug(f"[OPEN-FOLDER] Called with file_path={repr(file_path)}")
 
@@ -653,20 +654,24 @@ class HomePage(QWidget):
             logger.debug(f"[OPEN-FOLDER] Falling back to dirname(file_path): {repr(fallback)}")
             folder = fallback
 
-        # 强制使用反斜杠（Windows explorer 兼容）
-        if folder:
+        # Windows: 使用 normpath 确保路径格式正确
+        if folder and sys.platform == "win32":
             folder = os.path.normpath(folder)
 
         logger.debug(f"[OPEN-FOLDER] Final folder={repr(folder)}, exists={os.path.exists(folder) if folder else False}")
 
         if folder and os.path.exists(folder):
             try:
-                os.startfile(folder)
+                if sys.platform == "win32":
+                    os.startfile(folder)
+                elif sys.platform == "darwin":
+                    subprocess.Popen(["open", folder])
+                else:
+                    subprocess.Popen(["xdg-open", folder])
                 self._log(f"已打开文件夹: {folder}")
             except Exception as e:
-                logger.error(f"[OPEN-FOLDER] os.startfile failed: {e}, trying explorer")
-                subprocess.Popen(["explorer", folder])
-                self._log(f"已打开文件夹: {folder}")
+                logger.error(f"[OPEN-FOLDER] Failed to open folder: {e}")
+                self._log(f"无法打开文件夹: {folder}")
         else:
             logger.warning(f"[OPEN-FOLDER] Folder does not exist: {repr(folder)}")
             self._log(f"无法打开文件夹: {folder}")
@@ -775,7 +780,13 @@ class HomePage(QWidget):
                 summary_path = get_summary_path(item.result_path)
                 if summary_path and os.path.exists(summary_path):
                     import subprocess
-                    subprocess.Popen(["explorer", summary_path])
+                    import sys
+                    if sys.platform == "win32":
+                        subprocess.Popen(["explorer", summary_path])
+                    elif sys.platform == "darwin":
+                        subprocess.Popen(["open", summary_path])
+                    else:
+                        subprocess.Popen(["xdg-open", summary_path])
                     self._log(f"已打开摘要: {os.path.basename(summary_path)}")
                 else:
                     QMessageBox.information(self, "提示", "未找到 AI 摘要文件")
