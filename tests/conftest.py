@@ -5,6 +5,7 @@ import sys
 import wave
 import struct
 import math
+from pathlib import Path
 
 import pytest
 
@@ -28,6 +29,48 @@ def pytest_configure(config):
 def _funasr_available():
     import importlib.util
     return importlib.util.find_spec("funasr") is not None
+
+
+def _pyaudio_available():
+    import importlib.util
+    return importlib.util.find_spec("pyaudiowpatch") is not None or \
+           importlib.util.find_spec("pyaudio") is not None
+
+
+# 需要 funasr 的测试文件名模式
+_FUNASR_TEST_PATTERNS = [
+    "test_transcriber",
+    "test_voiceprint_extraction",
+    "test_voiceprint_fix",
+    "test_voiceprint_threshold",
+]
+
+# 需要 pyaudiowpatch 的测试文件名模式
+_PYAUDIO_TEST_PATTERNS = [
+    "test_recorder",
+]
+
+
+def pytest_ignore_collect(collection_path, config):
+    """在收集阶段（导入之前）跳过需要重型依赖的测试文件。
+
+    此钩子在 pytest 尝试导入测试文件之前执行，
+    因此可以避免因模块级导入失败导致的 Exit Code 3。
+    """
+    if not collection_path.is_file() or collection_path.suffix != ".py":
+        return False
+
+    filename = collection_path.stem
+
+    if any(pattern in filename for pattern in _FUNASR_TEST_PATTERNS):
+        if not _funasr_available():
+            return True
+
+    if any(pattern in filename for pattern in _PYAUDIO_TEST_PATTERNS):
+        if not _pyaudio_available():
+            return True
+
+    return False
 
 
 def pytest_collection_modifyitems(config, items):

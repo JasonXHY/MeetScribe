@@ -12,14 +12,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install system dependencies for Qt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1 \
+            libxkbcommon-x11-0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxcb-xfixes0 \
+            libxcb-xinerama0 \
+            libxcb-xkb1 \
+            libxcb-cursor0 \
+            libegl1
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install lightweight deps
-        # 仅安装可在 CI 运行的轻依赖；funasr / pyaudiowpatch（重型/仅 Windows）不在 CI 安装，
-        # 对应的 e2e_heavy / e2e_network 用例会自动 skip（见 tests/conftest.py）。
         run: |
           python -m pip install --upgrade pip
           pip install PySide6 numpy soundfile openai pytest pytest-qt
@@ -28,5 +44,4 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          # pytest.ini 默认 addopts 已排除 e2e_heavy / e2e_network。
           python -m pytest tests/ -p no:cacheprovider
