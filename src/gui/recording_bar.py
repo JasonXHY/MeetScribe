@@ -42,8 +42,12 @@ class RecordingBar(QFrame):
         self._setup_ui()
 
     def eventFilter(self, obj, event):
-        """阻止 ComboBox 滚轮变更值"""
+        """阻止 ComboBox 滚轮变更值，但允许页面继续滚动"""
+        from PySide6.QtWidgets import QApplication
         if event.type() == QEvent.Wheel and isinstance(obj, QComboBox):
+            parent = obj.parentWidget()
+            if parent:
+                QApplication.sendEvent(parent, event)
             return True
         return super().eventFilter(obj, event)
 

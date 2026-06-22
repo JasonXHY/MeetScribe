@@ -62,10 +62,15 @@ class SettingsPage(QWidget):
             logger.warning(f"Failed to init ModelManager: {e}")
 
     def eventFilter(self, obj, event):
-        """阻止 ComboBox 滚轮变更值，避免误操作"""
+        """阻止 ComboBox 滚轮变更值，但允许页面继续滚动"""
         from PySide6.QtCore import QEvent
+        from PySide6.QtWidgets import QApplication
         if event.type() == QEvent.Wheel and isinstance(obj, QComboBox):
-            return True  # 拦截滚轮事件
+            # 将滚轮事件转发给父容器，让页面继续滚动
+            parent = obj.parentWidget()
+            if parent:
+                QApplication.sendEvent(parent, event)
+            return True  # 拦截 ComboBox 自身处理
         return super().eventFilter(obj, event)
 
     def _disable_combo_wheel(self, combo):
