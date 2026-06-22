@@ -101,7 +101,8 @@ class SpeakerProfile:
         if not self.embeddings:
             return None
         vectors = [e["vector"] for e in self.embeddings]
-        weights = [e["quality"] for e in self.embeddings]
+        # 确保 quality > 0，避免零权重样本（防御脏数据）
+        weights = [max(e.get("quality", 0.85), 0.01) for e in self.embeddings]
         return np.average(vectors, weights=weights, axis=0)
 
     def can_match(self):
@@ -357,8 +358,8 @@ class VoiceprintLibrary:
     @staticmethod
     def _cosine_similarity(a, b):
         """计算余弦相似度"""
-        a = np.array(a)
-        b = np.array(b)
+        a = np.array(a).flatten()
+        b = np.array(b).flatten()
 
         # 维度校验：防止模型版本不匹配导致错误匹配
         if a.shape != b.shape:

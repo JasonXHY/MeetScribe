@@ -558,6 +558,25 @@ class HomePage(QWidget):
         """转写完成回调（home_page 版本）"""
         self._btn_transcribe.setEnabled(True)
         self._btn_transcribe.setText("开始转写")
+        self._recording_bar.stop_btn.setEnabled(False)
+        self._recording_bar.stop_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                border: 1px solid {C_TXT3};
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-family: {FONT_FAMILY};
+                font-size: 12px;
+                color: {C_TXT3};
+            }}
+            QPushButton:hover {{
+                background-color: #F0F0F0;
+            }}
+            QPushButton:disabled {{
+                border-color: {C_TXT3};
+                color: {C_TXT3};
+            }}
+        """)
         self.refresh_file_list()
         msg = f"转写完成: 成功 {success_count} 个"
         if fail_count > 0:
@@ -798,6 +817,25 @@ class HomePage(QWidget):
         """停止转写"""
         if self._app and hasattr(self._app, '_transcription_handler'):
             self._app._transcription_handler.stop_transcription(file_path)
+            self._recording_bar.stop_btn.setEnabled(False)
+            self._recording_bar.stop_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    border: 1px solid {C_TXT3};
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                    font-family: {FONT_FAMILY};
+                    font-size: 12px;
+                    color: {C_TXT3};
+                }}
+                QPushButton:hover {{
+                    background-color: #F0F0F0;
+                }}
+                QPushButton:disabled {{
+                    border-color: {C_TXT3};
+                    color: {C_TXT3};
+                }}
+            """)
 
     def _queue_move_up(self, file_path):
         """队列上移"""
@@ -831,6 +869,21 @@ class HomePage(QWidget):
             handler.start([file_path], fmt, {}, "")
             self._btn_transcribe.setEnabled(False)
             self._btn_transcribe.setText("转写中...")
+            self._recording_bar.stop_btn.setEnabled(True)
+            self._recording_bar.stop_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    border: 1px solid {C_ERROR};
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                    font-family: {FONT_FAMILY};
+                    font-size: 12px;
+                    color: {C_ERROR};
+                }}
+                QPushButton:hover {{
+                    background-color: #FDE8E8;
+                }}
+            """)
             self._log(f"开始转写: {os.path.basename(file_path)}")
             self.refresh_file_list()
 
@@ -878,6 +931,21 @@ class HomePage(QWidget):
                 handler.start(all_paths, fmt, {}, "")
                 self._btn_transcribe.setEnabled(False)
                 self._btn_transcribe.setText("转写中...")
+                self._recording_bar.stop_btn.setEnabled(True)
+                self._recording_bar.stop_btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: transparent;
+                        border: 1px solid {C_ERROR};
+                        border-radius: 6px;
+                        padding: 6px 12px;
+                        font-family: {FONT_FAMILY};
+                        font-size: 12px;
+                        color: {C_ERROR};
+                    }}
+                    QPushButton:hover {{
+                        background-color: #FDE8E8;
+                    }}
+                """)
                 self._log(f"开始转写 {len(all_paths)} 个文件...")
                 self.refresh_file_list()
 

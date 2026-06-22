@@ -248,6 +248,15 @@ class TranscriptionHandler(QObject):
         elif msg_type == "auto_summary":
             # AI 摘要
             base, out_dir = msg[1], msg[2]
+
+            # 先执行声纹匹配（如果尚未执行且有嵌入数据）
+            if not self._voiceprint_matched and self._speaker_embeddings:
+                self._match_voiceprints()
+
+            # 执行姓名应用（无论有无声纹，正则提取都需要跑）
+            self._apply_speaker_names()
+
+            # 最后生成摘要（确保声纹匹配和姓名应用已完成）
             auto_summary = self._app.config.get("auto_summary", True) if self._app else True
             # 支持布尔值和字符串两种格式
             should_summary = (
@@ -643,16 +652,28 @@ class TranscriptionHandler(QObject):
                 # 提取参会人员映射
                 speaker_mapping = self._extract_speaker_mapping_from_summary(summary)
                 if speaker_mapping and self._app and hasattr(self._app, 'file_manager'):
-                    for item in self._app.file_manager.files:
-                        if item.result_path and os.path.basename(item.result_path).startswith(base_name + "_transcript"):
-                            if os.path.exists(item.result_path):
-                                apply_speaker_mapping(item.result_path, speaker_mapping)
-                            if os.path.exists(summary_path):
-                                apply_speaker_mapping(summary_path, speaker_mapping)
-                            str_mapping = {str(k): v for k, v in speaker_mapping.items()}
-                            self._app.file_manager.update_speaker_names(item.file_path, str_mapping)
-                            self.log_message.emit(f"已自动识别参会人员: {', '.join(f'Speaker {k}→{v}' for k, v in speaker_mapping.items())}")
-                            break
+                    # 过滤已被声纹 confirmed 匹配的说话人（不覆盖）
+                    confirmed_ids = {
+                        int(spk_id) + 1
+                        for spk_id, info in (self._voiceprint_match_results or {}).items()
+                        if isinstance(info, dict) and info.get("confidence") == "confirmed"
+                    }
+                    filtered_mapping = {
+                        k: v for k, v in speaker_mapping.items()
+                        if k not in confirmed_ids
+                    }
+
+                    if filtered_mapping:
+                        for item in self._app.file_manager.files:
+                            if item.result_path and os.path.basename(item.result_path).startswith(base_name + "_transcript"):
+                                if os.path.exists(item.result_path):
+                                    apply_speaker_mapping(item.result_path, filtered_mapping)
+                                if os.path.exists(summary_path):
+                                    apply_speaker_mapping(summary_path, filtered_mapping)
+                                str_mapping = {str(k): v for k, v in filtered_mapping.items()}
+                                self._app.file_manager.update_speaker_names(item.file_path, str_mapping)
+                                self.log_message.emit(f"已自动识别参会人员: {', '.join(f'Speaker {k}→{v}' for k, v in filtered_mapping.items())}")
+                                break
             else:
                 self.log_message.emit(f"摘要生成失败: {summary}")
         except Exception as e:
@@ -694,6 +715,7 @@ class TranscriptionHandler(QObject):
           - N. 姓名
 
         过滤角色推断（如"（项目负责人）"、"（角色推断：XXX）"）
+        过滤重复姓名（如"嘉诚 嘉诚" → "嘉诚"）
         """
         mapping = {}
         try:
@@ -701,21 +723,27 @@ class TranscriptionHandler(QObject):
             in_section = False
             for line in lines:
                 line = line.strip()
-                if "参会人员" in line or "与会人员" in line or "Speaker" in line:
+                # 仅在 header 行触发 in_section
+                if re.match(r'^#+\s*(?:参会人员|与会者|出席人员|Participants)', line, re.IGNORECASE):
                     in_section = True
                     continue
                 if in_section:
                     if line.startswith("- ") or line.startswith("* "):
                         content = line.lstrip("-* ").strip()
-                        # 匹配 [Speaker N] 姓名 格式
-                        m = re.match(r'\[Speaker\s+(\d+)\]\s*(.+)', content)
+                        # 匹配 [Speaker N] 姓名 格式（支持 — 角色描述 后缀）
+                        m = re.match(r'\[Speaker\s+(\d+)\]\s+(.+?)(?:\s*[—\-]\s*.*)?$', content)
                         if m:
                             spk_num = int(m.group(1))
-                            name = m.group(2).strip()
+                            name = m.group(2).strip().strip('*_#,，。')
                             # 过滤角色推断：以括号开头的不是姓名
-                            if name and name.startswith(("（", "(", "（角色")):
+                            if name and name.startswith(("（", "(")):
                                 continue
-                            if name and len(name) < 20:
+                            # 过滤重复姓名（如 "嘉诚 嘉诚" → "嘉诚"）
+                            if name and " " in name:
+                                parts = name.split()
+                                if len(parts) == 2 and parts[0] == parts[1]:
+                                    name = parts[0]
+                            if name and len(name) < 50:
                                 mapping[spk_num] = name
                                 continue
                         # 匹配 Speaker N: 姓名 格式
@@ -725,7 +753,12 @@ class TranscriptionHandler(QObject):
                             name = m.group(2).strip()
                             if name and name.startswith(("（", "(")):
                                 continue
-                            if name and len(name) < 20:
+                            # 过滤重复姓名
+                            if name and " " in name:
+                                parts = name.split()
+                                if len(parts) == 2 and parts[0] == parts[1]:
+                                    name = parts[0]
+                            if name and len(name) < 50:
                                 mapping[spk_num] = name
                                 continue
                         # 匹配 N. 姓名 格式
@@ -733,7 +766,12 @@ class TranscriptionHandler(QObject):
                         if m:
                             spk_num = int(m.group(1))
                             name = m.group(2).strip()
-                            if name and len(name) < 20:
+                            # 过滤重复姓名
+                            if name and " " in name:
+                                parts = name.split()
+                                if len(parts) == 2 and parts[0] == parts[1]:
+                                    name = parts[0]
+                            if name and len(name) < 50:
                                 mapping[spk_num] = name
                     elif line and not line.startswith("#"):
                         in_section = False
