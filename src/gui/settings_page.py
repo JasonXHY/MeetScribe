@@ -414,12 +414,9 @@ class SettingsPage(QWidget):
         self._refresh_model_status()
 
     def _build_audio_section(self, layout):
-        """音频设备设置"""
+        """音频设备设置（v1.0: 已移除 VB-Cable，使用 WASAPI Loopback）"""
         group = self._create_group("音频设备", layout)
-        self._vb_cable_cb = QCheckBox("使用 VB-Audio Cable（推荐）")
-        self._vb_cable_cb.setChecked(self._config.get("use_vb_cable", False) if self._config else False)
-        group.layout().addWidget(self._vb_cable_cb)
-        hint = QLabel("启用后可避免停止录音时暂停媒体播放器")
+        hint = QLabel("系统音频录制使用 Windows 内置 WASAPI Loopback，无需额外安装驱动")
         hint.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
         group.layout().addWidget(hint)
 
@@ -788,8 +785,6 @@ class SettingsPage(QWidget):
         if hasattr(self, '_auto_correction_combo'):
             self._config.set("auto_correction", self._auto_correction_combo.currentText())
 
-        if hasattr(self, '_vb_cable_cb'):
-            self._config.set("use_vb_cable", self._vb_cable_cb.isChecked())
         if hasattr(self, '_notification_cb'):
             self._config.set("enable_notification", self._notification_cb.isChecked())
 

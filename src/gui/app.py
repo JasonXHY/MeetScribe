@@ -262,7 +262,25 @@ class MeetScribeApp(QMainWindow):
 
     def _show_first_launch(self):
         """显示首次启动引导"""
-        show_first_launch_dialog(self, self.config)
+        from gui.first_launch import FirstLaunchDialog, check_first_launch
+        if not check_first_launch(self.config):
+            return
+
+        dialog = FirstLaunchDialog(self, self.config)
+
+        def on_use_builtin():
+            self._log("已使用内置 API Key")
+
+        def on_go_to_settings():
+            self._on_navigate("settings")
+
+        dialog.use_builtin_api.connect(on_use_builtin)
+        dialog.go_to_settings.connect(on_go_to_settings)
+        dialog.exec()
+
+        # 兜底：即使对话框被强制关闭，也标记已完成首次启动
+        self.config.set("first_launch", False)
+        self.config.save()
 
     def _on_settings_changed(self):
         """设置变更回调"""
