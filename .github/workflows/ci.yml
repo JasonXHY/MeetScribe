@@ -22,7 +22,7 @@ jobs:
         # 对应的 e2e_heavy / e2e_network 用例会自动 skip（见 tests/conftest.py）。
         run: |
           python -m pip install --upgrade pip
-          pip install PySide6 numpy soundfile openai pytest pytest-qt pytest-timeout
+          pip install PySide6 numpy soundfile openai pytest pytest-qt
 
       - name: Run unit + integration tests (offscreen)
         env:
