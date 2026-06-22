@@ -42,3 +42,4 @@ data/
 
 # Config with secrets (API keys)
 config/settings.json
+src/config/settings.json
