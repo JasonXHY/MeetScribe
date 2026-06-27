@@ -25,6 +25,17 @@ from formatters import TranscriptFormatter
 logger = logging.getLogger("MeetScribe")
 
 
+def _get_model_dir():
+    """获取模型目录（frozen 模式下使用打包的模型）"""
+    if getattr(sys, 'frozen', False):
+        # 打包模式：模型在 exe 同目录的 models/ 下
+        return os.path.join(os.path.dirname(sys.executable), 'models')
+    else:
+        # 开发模式：使用缓存目录
+        from utils import get_data_dir
+        return os.path.join(get_data_dir(), 'models_cache')
+
+
 def _compute_quality(segment_count, total_duration_sec):
     """计算嵌入质量分数
 
@@ -97,22 +108,12 @@ _temp_model_dirs = []
 
 
 def _setup_modelscope_cache(cache_dir):
-    """在最早时机设置 MODELSCOPE_CACHE 环境变量，确保 FunASR 使用指定缓存目录"""
+    """在最早时机设置 MODELSCOPE_CACHE 环境变量"""
     global _MODELSCOPE_CACHE_SET
     if _MODELSCOPE_CACHE_SET or not cache_dir:
         return
     os.environ["MODELSCOPE_CACHE"] = cache_dir
     os.environ.setdefault("MODELSCOPE_SCENARIO", "cli")
-
-    # 增大 SDK 超时（默认 60s 对慢速网络不够）
-    # 依赖 modelscope.hub.constants，版本变化时静默跳过
-    try:
-        import modelscope.hub.constants as hc
-        hc.API_FILE_DOWNLOAD_TIMEOUT = 180  # per-socket-read: 180s
-        hc.API_HTTP_CLIENT_TIMEOUT = 180    # 连接+API调用: 180s
-    except (ImportError, AttributeError):
-        pass
-
     _MODELSCOPE_CACHE_SET = True
     logger.info(f"MODELSCOPE_CACHE set to: {cache_dir}")
 
@@ -465,6 +466,8 @@ class Transcriber:
     """MeetScribe 核心转写引擎"""
 
     def __init__(self, model_cache_dir=None, device="cpu"):
+        if model_cache_dir is None:
+            model_cache_dir = _get_model_dir()
         self.model = None
         self.device = device
         self.model_cache_dir = model_cache_dir

@@ -10,6 +10,8 @@
 """
 
 import logging
+import os
+import sys
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QStackedWidget, QWidget
@@ -67,10 +69,18 @@ class FirstLaunchDialog(QDialog):
         self.setModal(True)
 
         self._config = config
+        self._models_packaged = self._check_models_packaged()
         self._model_dir = MODEL_CACHE_DIR
         self._worker = None
 
         self._build()
+
+    def _check_models_packaged(self):
+        """检查模型是否已打包到安装目录"""
+        if getattr(sys, 'frozen', False):
+            model_dir = os.path.join(os.path.dirname(sys.executable), 'models')
+            return os.path.exists(model_dir)
+        return False
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -103,7 +113,8 @@ class FirstLaunchDialog(QDialog):
         # 步骤页容器
         self._stack = QStackedWidget()
         self._stack.addWidget(self._build_beta_step())
-        self._stack.addWidget(self._build_model_step())
+        if not self._models_packaged:
+            self._stack.addWidget(self._build_model_step())
         layout.addWidget(self._stack, 1)
 
         # 底部到期提醒
@@ -317,8 +328,11 @@ class FirstLaunchDialog(QDialog):
         if self._config:
             self._config.set("ai_user_api_key", "")
         self.use_builtin_api.emit()
-        self._stack.setCurrentIndex(1)
-        self._update_nav()
+        if self._stack.count() > 1:
+            self._stack.setCurrentIndex(1)
+            self._update_nav()
+        else:
+            self._finish()
 
     def _on_setup_own(self):
         """自己配置 API Key → 跳转设置页"""

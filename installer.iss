@@ -11,7 +11,7 @@ AppSupportURL=https://github.com/JasonXHY/MeetScribe/issues
 AppUpdatesURL=https://github.com/JasonXHY/MeetScribe/releases
 DefaultDirName={autopf}\MeetScribe
 DefaultGroupName=侧耳倾听
-LicenseFile=LICENSE
+LicenseFile=LICENSE_CN.md
 OutputDir=installer_output
 OutputBaseFilename=MeetScribe-1.0-Setup
 SetupIconFile=assets\logo.ico
@@ -31,7 +31,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; OnlyBelowVersion: 6.1
 
 [Files]
+; 主程序
 Source: "dist\侧耳倾听\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; 模型文件（从项目根目录的 models 文件夹复制）
+Source: "models\*"; DestDir: "{app}\models"; Flags: ignoreversion recursesubdirs createallsubdirs
+; VB-Cable 安装包
+Source: "drivers\VBCABLE_Driver_Pack45\VBCABLE_Setup_x64.exe"; DestDir: "{tmp}\vbcable"; Flags: deleteafterinstall
 
 [Icons]
 Name: "{group}\侧耳倾听"; Filename: "{app}\侧耳倾听.exe"
@@ -40,6 +45,9 @@ Name: "{autodesktop}\侧耳倾听"; Filename: "{app}\侧耳倾听.exe"; Tasks: d
 Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\侧耳倾听"; Filename: "{app}\侧耳倾听.exe"; Tasks: quicklaunchicon
 
 [Run]
+; 安装 VB-Cable（静默模式）
+Filename: "{tmp}\vbcable\VBCABLE_Setup_x64.exe"; Parameters: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"; StatusMsg: "安装虚拟音频设备..."; Flags: waituntilterminated skipifsilent
+; 安装完成后启动程序
 Filename: "{app}\侧耳倾听.exe"; Parameters: "--data-dir ""{userappdata}\MeetScribe"""; Description: "安装完成后启动侧耳倾听"; Flags: nowait postinstall skipifsilent
 
 [Code]
