@@ -14,6 +14,7 @@ import time
 import html
 import logging
 import subprocess
+import shutil
 import tempfile
 import threading
 from datetime import datetime
@@ -90,6 +91,9 @@ _MODEL_ALIASES = {k: v["ms_id"] for k, v in REQUIRED_MODELS.items()}
 
 # 全局 MODELSCOPE_CACHE 设置标志
 _MODELSCOPE_CACHE_SET = False
+
+# 追踪 _safe_model_path 创建的临时目录，便于会话结束时清理
+_temp_model_dirs = []
 
 
 def _setup_modelscope_cache(cache_dir):
@@ -442,7 +446,19 @@ def _safe_model_path(model_path):
     dest = os.path.join(tmp_dir, os.path.basename(model_path))
     logger.info(f"Non-ASCII path detected, copying model to: {dest}")
     shutil.copytree(model_path, dest, dirs_exist_ok=True)
+    _temp_model_dirs.append(tmp_dir)
     return dest
+
+
+def _cleanup_temp_model_dirs():
+    """清理 _safe_model_path 创建的临时目录"""
+    for d in _temp_model_dirs:
+        try:
+            if os.path.exists(d):
+                shutil.rmtree(d)
+        except Exception as e:
+            logger.warning(f"Failed to clean temp model dir {d}: {e}")
+    _temp_model_dirs.clear()
 
 
 class Transcriber:
@@ -639,6 +655,7 @@ class Transcriber:
             logger.info(f"[Stage 4] Post-processing done: {len(sentences)} sentences")
 
         finally:
+            _cleanup_temp_model_dirs()
             if audio_for_asr != audio_path and os.path.exists(audio_for_asr):
                 try:
                     os.remove(audio_for_asr)
@@ -724,6 +741,7 @@ class Transcriber:
                 logger.error(f"Transcription failed: {e}")
                 raise
         finally:
+            _cleanup_temp_model_dirs()
             # 清理临时文件
             if audio_for_asr != audio_path and os.path.exists(audio_for_asr):
                 try:

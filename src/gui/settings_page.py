@@ -25,6 +25,7 @@ logger = logging.getLogger("MeetScribe")
 class ModelDownloadWorker(QThread):
     """模型下载工作线程"""
     finished = Signal(bool, str)  # success, message
+    progress = Signal(int, str)
 
     def __init__(self, model_manager, parent=None):
         super().__init__(parent)
@@ -32,9 +33,9 @@ class ModelDownloadWorker(QThread):
 
     def run(self):
         try:
-            success, msg = self._model_manager.download_all_missing(
-                progress_callback=lambda m: None
-            )
+            def _cb(msg):
+                self.progress.emit(0, str(msg))
+            success, msg = self._model_manager.download_all_missing(progress_callback=_cb)
             self.finished.emit(success, msg)
         except Exception as e:
             self.finished.emit(False, str(e))
@@ -683,6 +684,7 @@ class SettingsPage(QWidget):
 
         self._download_worker = ModelDownloadWorker(self._model_manager, self)
         self._download_worker.finished.connect(self._on_download_complete)
+        self._download_worker.progress.connect(self._on_download_progress)
         self._download_worker.start()
 
     def _on_download_complete(self, success, msg):
@@ -697,6 +699,10 @@ class SettingsPage(QWidget):
         else:
             self._log(f"模型下载失败: {msg}")
             QMessageBox.critical(self, "错误", f"模型下载失败:\n{msg}")
+
+    def _on_download_progress(self, percent, message):
+        if hasattr(self, '_model_status_label'):
+            self._model_status_label.setText(message)
 
     def _restore_config(self):
         """从配置恢复 UI 状态"""
