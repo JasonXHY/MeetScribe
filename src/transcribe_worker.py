@@ -17,8 +17,13 @@ if sys.stderr is None:
     sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
 # 在子进程中配置日志（只写文件，不写控制台）
-_src_dir = os.path.dirname(os.path.abspath(__file__))
-_log_dir = os.path.join(os.path.dirname(_src_dir), "logs")
+# 打包模式使用 AppData 目录，开发模式使用项目目录
+if getattr(sys, 'frozen', False):
+    _data_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'MeetScribe')
+else:
+    _src_dir = os.path.dirname(os.path.abspath(__file__))
+    _data_dir = os.path.dirname(_src_dir)
+_log_dir = os.path.join(_data_dir, "logs")
 os.makedirs(_log_dir, exist_ok=True)
 _log_file = os.path.join(_log_dir, "meetscribe.log")
 

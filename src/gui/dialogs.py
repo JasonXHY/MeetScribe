@@ -15,10 +15,10 @@ import json
 import logging
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QPlainTextEdit, QComboBox, QFileDialog, QMessageBox,
+    QPlainTextEdit, QTextBrowser, QComboBox, QFileDialog, QMessageBox,
     QLineEdit, QScrollArea, QWidget, QFrame
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QFont, QColor
 
 from gui.styles import (
@@ -27,6 +27,76 @@ from gui.styles import (
 )
 
 logger = logging.getLogger("MeetScribe")
+
+
+class EmbeddingExtractWorker(QThread):
+    """后台提取声纹嵌入向量（避免阻塞 GUI）"""
+    finished = Signal(object)  # embedding or None
+    error = Signal(str)
+
+    def __init__(self, audio_path, sentences, spk_id):
+        super().__init__()
+        self._audio_path = audio_path
+        self._sentences = sentences
+        self._spk_id = spk_id
+
+    def run(self):
+        try:
+            import numpy as np
+            import soundfile as sf
+            from funasr import AutoModel
+        except ImportError:
+            self.error.emit("缺少依赖库")
+            return
+
+        try:
+            speaker_segments = []
+            for sent in self._sentences:
+                sent_spk = sent.get('spk_id', sent.get('spk', -1))
+                if sent_spk == self._spk_id:
+                    speaker_segments.append({
+                        'start': sent.get('start', 0),
+                        'end': sent.get('end', 0),
+                    })
+
+            if not speaker_segments:
+                self.finished.emit(None)
+                return
+
+            segments_sorted = sorted(speaker_segments, key=lambda s: s['end'] - s['start'], reverse=True)
+            best = segments_sorted[0]
+            start_ms, end_ms = _middle_third_window(best['start'], best['end'])
+
+            audio_data, sr = sf.read(self._audio_path)
+            if len(audio_data.shape) > 1:
+                audio_data = audio_data.mean(axis=1)
+            start_s = int(start_ms / 1000 * sr)
+            end_s = int(end_ms / 1000 * sr)
+            segment = audio_data[start_s:end_s].astype(np.float32)
+
+            min_len = int(0.5 * sr)
+            if len(segment) < min_len:
+                self.finished.emit(None)
+                return
+
+            model = AutoModel(model="cam++", device="cpu", disable_update=True)
+            result = model.inference(input=segment)
+            if result and len(result) > 0:
+                spk_emb = result[0].get("spk_embedding")
+                if spk_emb is not None:
+                    if hasattr(spk_emb, "cpu"):
+                        spk_emb = spk_emb.cpu().numpy()
+                    if hasattr(spk_emb, "tolist"):
+                        spk_emb = np.array(spk_emb.tolist())
+                    if isinstance(spk_emb, list):
+                        spk_emb = np.array(spk_emb)
+                    if len(spk_emb.shape) > 1 and spk_emb.shape[0] == 1:
+                        spk_emb = spk_emb[0]
+                    self.finished.emit(spk_emb.tolist())
+                    return
+            self.finished.emit(None)
+        except Exception as e:
+            self.error.emit(str(e))
 
 
 def _middle_third_window(start_ms, end_ms):
@@ -98,11 +168,11 @@ class PreviewDialog(QDialog):
         tab_layout.addStretch()
         layout.addLayout(tab_layout)
 
-        self._text_box = QPlainTextEdit()
-        self._text_box.setReadOnly(True)
+        self._text_box = QTextBrowser()
+        self._text_box.setOpenExternalLinks(False)
         self._text_box.setFont(QFont("Consolas", 13))
         self._text_box.setStyleSheet(f"""
-            QPlainTextEdit {{ background-color: {C_CARD}; color: {C_TXT1};
+            QTextBrowser {{ background-color: {C_CARD}; color: {C_TXT1};
                 border: 1px solid {C_BORDER}; border-radius: 8px; padding: 8px; }}
         """)
         layout.addWidget(self._text_box, 1)
@@ -121,7 +191,12 @@ class PreviewDialog(QDialog):
         self._show_transcript()
 
     def _show_transcript(self):
-        self._text_box.setPlainText(self._transcript_text)
+        try:
+            import markdown
+            html = markdown.markdown(self._transcript_text)
+            self._text_box.setHtml(html)
+        except ImportError:
+            self._text_box.setPlainText(self._transcript_text)
         self._btn_transcript.setStyleSheet(f"""
             QPushButton {{ background-color: {C_ACCENT}; color: white; border: none;
                 border-radius: 6px; font-family: {FONT_FAMILY}; font-size: 12px; }}
@@ -135,7 +210,12 @@ class PreviewDialog(QDialog):
 
     def _show_summary(self):
         if self._summary_text:
-            self._text_box.setPlainText(self._summary_text)
+            try:
+                import markdown
+                html = markdown.markdown(self._summary_text)
+                self._text_box.setHtml(html)
+            except ImportError:
+                self._text_box.setPlainText(self._summary_text)
             self._btn_summary.setStyleSheet(f"""
                 QPushButton {{ background-color: {C_ACCENT}; color: white; border: none;
                     border-radius: 6px; font-family: {FONT_FAMILY}; font-size: 12px; }}
@@ -573,17 +653,49 @@ class SpeakerDialog(QDialog):
             QMessageBox.information(self, "提示", "请先输入说话人姓名")
             return
 
-        middle_embedding = None
-        if self._audio_path and self._sentences:
-            middle_embedding = self._extract_middle_segment_embedding(
-                spk['spk_id'], duration_sec=5
-            )
+        # 禁用按钮防止重入
+        save_btn = self.sender()
+        if save_btn:
+            save_btn.setEnabled(False)
 
-        embedding = middle_embedding
+        if self._audio_path and self._sentences:
+            # 后台线程提取声纹
+            self._saving_idx = idx
+            self._save_btn = save_btn
+            self._embedding_worker = EmbeddingExtractWorker(
+                self._audio_path, self._sentences, spk['spk_id']
+            )
+            self._embedding_worker.finished.connect(self._on_embedding_extracted)
+            self._embedding_worker.error.connect(self._on_embedding_error)
+            self._embedding_worker.start()
+        else:
+            embedding = self._get_speaker_embedding(spk['spk_id'])
+            self._finish_save_to_library(idx, embedding, save_btn)
+
+    def _on_embedding_extracted(self, embedding):
+        """声纹提取完成回调"""
+        idx = self._saving_idx
+        save_btn = self._save_btn
+        self._finish_save_to_library(idx, embedding, save_btn)
+
+    def _on_embedding_error(self, error_msg):
+        """声纹提取失败回调"""
+        save_btn = self._save_btn
+        if save_btn:
+            save_btn.setEnabled(True)
+        QMessageBox.warning(self, "提示", f"声纹提取失败: {error_msg}")
+
+    def _finish_save_to_library(self, idx, embedding, save_btn):
+        """完成保存到音色库"""
+        spk = self._speakers[idx]
+        name = self._speaker_entries[idx].text().strip()
+
         if embedding is None:
             embedding = self._get_speaker_embedding(spk['spk_id'])
 
         if embedding is None:
+            if save_btn:
+                save_btn.setEnabled(True)
             QMessageBox.information(self, "提示", "无法获取该说话人的声纹数据")
             return
 
@@ -604,6 +716,9 @@ class SpeakerDialog(QDialog):
         except Exception as e:
             logger.error(f"保存到音色库失败: {e}")
             QMessageBox.critical(self, "错误", f"保存到音色库失败:\n{e}")
+        finally:
+            if save_btn:
+                save_btn.setEnabled(True)
 
     def _on_voiceprint_select(self, name, entry):
         if name and name != "（从音色库选择）":
@@ -721,6 +836,11 @@ class SpeakerDialog(QDialog):
 
     @staticmethod
     def _get_embedding_by_id(embeddings, spk_id):
+        # 1. 直接用原始 key 查找（兼容字符串 key）
+        if spk_id in embeddings:
+            return embeddings[spk_id]
+
+        # 2. 尝试转整数查找
         try:
             key = int(spk_id)
             if key in embeddings:
@@ -728,6 +848,7 @@ class SpeakerDialog(QDialog):
         except (ValueError, TypeError):
             pass
 
+        # 3. 兼容 "spk-N" 格式
         if isinstance(spk_id, str) and spk_id.startswith("spk-"):
             try:
                 key = int(spk_id[4:])
@@ -736,8 +857,10 @@ class SpeakerDialog(QDialog):
             except ValueError:
                 pass
 
-        if spk_id in embeddings:
-            return embeddings[spk_id]
+        # 4. 尝试字符串形式查找（JSON key 是字符串）
+        str_key = str(spk_id)
+        if str_key in embeddings:
+            return embeddings[str_key]
 
         return None
 

@@ -43,3 +43,20 @@ data/
 # Config with secrets (API keys)
 config/settings.json
 src/config/settings.json
+
+# Build outputs
+dist/
+build/
+build_spec/
+installer_output/
+
+# PyInstaller
+*.manifest
+*.spec.bak
+
+# Build virtual environment
+venv_build/
+
+# Meeting transcripts in src/ (should be in recordings/)
+src/*.md
+src/*.txt

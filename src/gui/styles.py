@@ -5,6 +5,8 @@
 """
 
 import os
+import sys
+from utils import get_data_dir
 
 # ── Color Palette (Windows 11 Light Fluent + 新设计系统) ──────
 C_BG         = "#F8F9FA"   # 页面背景
@@ -37,7 +39,13 @@ APP_NAME_EN  = "MeetScribe"
 FONT_FAMILY  = "Microsoft YaHei, Segoe UI, sans-serif"
 FONT_MONO    = "Cascadia Code, Consolas, monospace"
 TOPBAR_H     = 44
-ASSETS_DIR   = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets")
+
+# 资源目录：打包模式用 sys._MEIPASS，开发模式用 __file__ 计算
+if getattr(sys, 'frozen', False):
+    ASSETS_DIR = os.path.join(sys._MEIPASS, "assets")
+else:
+    ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets")
+
 ICON_PNG     = os.path.join(ASSETS_DIR, "logo_256x256.png")
 ICON_ICO     = os.path.join(ASSETS_DIR, "logo.ico")
 
@@ -105,7 +113,7 @@ OUTPUT_FORMATS = {
 }
 
 # ── Model Cache ──────────────────────────────────────────────
-MODEL_CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "models_cache")
+MODEL_CACHE_DIR = os.path.join(get_data_dir(), "models_cache")
 
 # ── Speaker Colors ───────────────────────────────────────────
 SPEAKER_COLORS = [

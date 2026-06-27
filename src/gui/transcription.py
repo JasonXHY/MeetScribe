@@ -10,6 +10,7 @@
 
 import os
 import re
+import json
 import logging
 import multiprocessing
 import queue
@@ -34,6 +35,7 @@ class TranscriptionHandler(QObject):
     transcription_done = Signal(int, int)  # success_count, fail_count
     progress_updated = Signal(object)
     refresh_needed = Signal()  # 通知主线程刷新文件列表
+    post_process_status = Signal(str)  # 后处理状态更新
 
     def __init__(self, app=None):
         super().__init__()
@@ -56,6 +58,8 @@ class TranscriptionHandler(QObject):
         self._voiceprint_matched = False
         self._voiceprint_match_results = {}
         self._current_batch_paths = set()
+        self._names_applied = False  # 防重入标记
+        self._active_workers = []  # 保持 Worker 引用，防止 GC 回收
 
     @property
     def is_transcribing(self):
@@ -130,6 +134,7 @@ class TranscriptionHandler(QObject):
         self._transcribing = True
         self._file_status = {}
         self._done_called = False  # 重置防重入标记
+        self._names_applied = False  # 重置姓名应用防重入标记
 
         # 重置说话人相关数据
         self._speaker_embeddings = {}
@@ -201,8 +206,11 @@ class TranscriptionHandler(QObject):
         elif msg_type == "log":
             self.log_message.emit(msg[1])
         elif msg_type == "processing":
-            self.file_status_changed.emit(msg[1], FileStatus.PROCESSING)
-            self._file_status[msg[1]] = "processing"
+            fp = msg[1]
+            if self._app and hasattr(self._app, 'file_manager'):
+                self._app.file_manager.update_status(fp, FileStatus.PROCESSING)
+            self.file_status_changed.emit(fp, FileStatus.PROCESSING)
+            self._file_status[fp] = "processing"
         elif msg_type == "file_done":
             fp, rpath = msg[1], msg[2]
             # 更新文件管理器
@@ -244,7 +252,7 @@ class TranscriptionHandler(QObject):
             )
             if should_correct:
                 self.log_message.emit(f"[AI纠错] 正在进行转写纠错...")
-                self._generate_correction(raw_text, base, out_dir, transcript_path)
+                self._start_correction_async(raw_text, base, out_dir, transcript_path)
         elif msg_type == "auto_summary":
             # AI 摘要
             base, out_dir = msg[1], msg[2]
@@ -271,7 +279,7 @@ class TranscriptionHandler(QObject):
                 if os.path.exists(transcript_path):
                     with open(transcript_path, "r", encoding="utf-8") as f:
                         transcript = f.read()
-                    self._generate_summary(transcript, base, out_dir)
+                    self._start_summary_async(transcript, base, out_dir)
         elif msg_type == "error":
             self.log_message.emit(f"转写失败: {msg[1]}")
             # 更新文件状态为失败
@@ -286,6 +294,9 @@ class TranscriptionHandler(QObject):
 
     def _on_done(self):
         """转写完成"""
+        if self._done_called:
+            return
+        self._done_called = True
         self._transcribing = False
         self._poll_timer.stop()
 
@@ -300,6 +311,9 @@ class TranscriptionHandler(QObject):
 
         # 发言人姓名提取（AI-003）：声纹 confirmed > 姓名提取 > 保留 Speaker N
         self._apply_speaker_names()
+
+        # 保存声纹embedding到磁盘（供重启后恢复）
+        self._save_embeddings_to_disk()
 
         # 清理资源
         try:
@@ -325,6 +339,49 @@ class TranscriptionHandler(QObject):
         next_task = self._task_queue.get_next_task()
         if next_task:
             self._execute_task(next_task)
+
+    def _save_embeddings_to_disk(self):
+        """将声纹嵌入向量保存到磁盘，程序重启后可恢复"""
+        if not self._speaker_embeddings:
+            return
+
+        # 按文件分组保存：遍历当前批次的文件，每个文件保存对应的嵌入向量
+        for fp in self._current_batch_paths:
+            if not self._app or not hasattr(self._app, 'file_manager'):
+                continue
+            item = self._app.file_manager.get_file(fp)
+            if not item or not item.result_path:
+                continue
+
+            result_dir = os.path.dirname(item.result_path)
+            base = os.path.splitext(os.path.basename(item.result_path))[0]
+            # 去掉 _transcript 后缀
+            if base.endswith("_transcript"):
+                base = base[:-len("_transcript")]
+
+            emb_path = os.path.join(result_dir, f"{base}_embeddings.json")
+
+            # 构建该文件的嵌入向量（所有说话人的）
+            emb_data = {}
+            for spk_id, embedding in self._speaker_embeddings.items():
+                # numpy array 转 list 以便 JSON 序列化
+                if hasattr(embedding, 'tolist'):
+                    emb_data[str(spk_id)] = {
+                        "vector": embedding.tolist(),
+                        "quality": self._speaker_qualities.get(spk_id, DEFAULT_SPK_QUALITY),
+                    }
+                else:
+                    emb_data[str(spk_id)] = {
+                        "vector": list(embedding) if embedding is not None else [],
+                        "quality": self._speaker_qualities.get(spk_id, DEFAULT_SPK_QUALITY),
+                    }
+
+            try:
+                with open(emb_path, "w", encoding="utf-8") as f:
+                    json.dump(emb_data, f, ensure_ascii=False, indent=2)
+                logger.debug(f"[EMBEDDINGS] 已保存到 {emb_path} ({len(emb_data)} 个说话人)")
+            except Exception as e:
+                logger.warning(f"[EMBEDDINGS] 保存失败: {e}")
 
     # ══════════════════════════════════════════════════════════
     #  Voiceprint Matching
@@ -470,6 +527,12 @@ class TranscriptionHandler(QObject):
         正则优先；正则无果且配置了可用 AI 服务时才走 LLM 兜底。
         懒加载导入 SpeakerNamer，使本模块在无 funasr 环境下仍可导入。
         """
+        # 防重入检查
+        if self._names_applied:
+            logger.debug("[SPEAKER_NAMES] Already applied, skipping")
+            return
+        self._names_applied = True
+
         try:
             if not (self._app and hasattr(self._app, 'file_manager')):
                 return
@@ -679,6 +742,132 @@ class TranscriptionHandler(QObject):
         except Exception as e:
             self.log_message.emit(f"AI 摘要异常: {e}")
 
+    def _start_correction_async(self, raw_text, base_name, out_dir, transcript_path):
+        """异步启动 AI 纠错"""
+        ai = self._get_ai_service()
+        if not ai:
+            self.log_message.emit("未配置云端 API Key，跳过转写纠错")
+            return
+
+        self.post_process_status.emit("正在进行AI纠错...")
+        worker = AICorrectionWorker(ai, raw_text)
+        worker.finished.connect(
+            lambda corrected: self._on_correction_finished(corrected, base_name, out_dir, transcript_path)
+        )
+        worker.error.connect(self._on_correction_error)
+        worker.finished.connect(lambda: self._remove_worker(worker))
+        worker.error.connect(lambda: self._remove_worker(worker))
+        self._active_workers.append(worker)
+        worker.start()
+
+    def _start_summary_async(self, transcript, base_name, out_dir):
+        """异步启动 AI 摘要"""
+        ai = self._get_ai_service()
+        if not ai:
+            self.log_message.emit("未配置云端 API Key，跳过自动摘要")
+            return
+
+        self.post_process_status.emit("正在生成摘要...")
+        worker = AISummaryWorker(ai, transcript, self._voiceprint_match_results)
+        worker.finished.connect(
+            lambda summary: self._on_summary_finished(summary, base_name, out_dir)
+        )
+        worker.error.connect(self._on_summary_error)
+        worker.finished.connect(lambda: self._remove_worker(worker))
+        worker.error.connect(lambda: self._remove_worker(worker))
+        self._active_workers.append(worker)
+        worker.start()
+
+    def _remove_worker(self, worker):
+        """Worker 完成后从活跃列表移除"""
+        if worker in self._active_workers:
+            self._active_workers.remove(worker)
+
+    def _on_correction_finished(self, corrected, base_name, out_dir, transcript_path):
+        """纠错完成回调"""
+        try:
+            if corrected:
+                # 备份原始转写
+                raw_path = os.path.join(out_dir, f"{base_name}_transcript_raw.md")
+                if not os.path.exists(raw_path):
+                    # 读取原始内容（从 transcript_path）
+                    if os.path.exists(transcript_path):
+                        with open(transcript_path, "r", encoding="utf-8") as rf:
+                            raw_text = rf.read()
+                        with open(raw_path, "w", encoding="utf-8") as wf:
+                            wf.write(raw_text)
+                        self.log_message.emit(f"原始转写已备份: {os.path.basename(raw_path)}")
+
+                # 保存纠错后的转写
+                with open(transcript_path, "w", encoding="utf-8") as tf:
+                    tf.write(corrected)
+                self.log_message.emit("LLM 转写纠错完成")
+            else:
+                self.log_message.emit("LLM 纠错无变化，保留原文")
+        except Exception as e:
+            self.log_message.emit(f"保存纠错结果失败: {e}")
+
+    def _on_correction_error(self, error_msg):
+        """纠错失败回调"""
+        self.log_message.emit(f"AI 纠错异常（已保留原文）: {error_msg}")
+
+    def _on_summary_finished(self, summary, base_name, out_dir):
+        """摘要完成回调"""
+        try:
+            if summary and not summary.startswith("[错误]"):
+                summary_name = f"{base_name}_summary.md"
+                summary_path = os.path.join(out_dir, summary_name)
+                with open(summary_path, "w", encoding="utf-8") as sf:
+                    sf.write(summary)
+                self.log_message.emit(f"摘要已保存: {summary_name}")
+
+                # 提取主题
+                topic = self._extract_topic_from_summary(summary)
+                if topic and self._app and hasattr(self._app, 'file_manager'):
+                    for item in self._app.file_manager.files:
+                        if item.result_path and os.path.basename(item.result_path).startswith(base_name + "_transcript"):
+                            self._app.file_manager.update_topic(item.file_path, topic)
+                            self.log_message.emit(f"会议主题: {topic}")
+                            break
+
+                # 主题更新后刷新文件列表
+                if topic and self._app and hasattr(self._app, '_home_page'):
+                    self.refresh_needed.emit()
+
+                # 提取参会人员映射
+                speaker_mapping = self._extract_speaker_mapping_from_summary(summary)
+                if speaker_mapping and self._app and hasattr(self._app, 'file_manager'):
+                    # 过滤已被声纹 confirmed 匹配的说话人（不覆盖）
+                    confirmed_ids = {
+                        int(spk_id) + 1
+                        for spk_id, info in (self._voiceprint_match_results or {}).items()
+                        if isinstance(info, dict) and info.get("confidence") == "confirmed"
+                    }
+                    filtered_mapping = {
+                        k: v for k, v in speaker_mapping.items()
+                        if k not in confirmed_ids
+                    }
+
+                    if filtered_mapping:
+                        for item in self._app.file_manager.files:
+                            if item.result_path and os.path.basename(item.result_path).startswith(base_name + "_transcript"):
+                                if os.path.exists(item.result_path):
+                                    apply_speaker_mapping(item.result_path, filtered_mapping)
+                                if os.path.exists(summary_path):
+                                    apply_speaker_mapping(summary_path, filtered_mapping)
+                                str_mapping = {str(k): v for k, v in filtered_mapping.items()}
+                                self._app.file_manager.update_speaker_names(item.file_path, str_mapping)
+                                self.log_message.emit(f"已自动识别参会人员: {', '.join(f'Speaker {k}→{v}' for k, v in filtered_mapping.items())}")
+                                break
+            else:
+                self.log_message.emit(f"摘要生成失败: {summary}")
+        except Exception as e:
+            self.log_message.emit(f"保存摘要结果失败: {e}")
+
+    def _on_summary_error(self, error_msg):
+        """摘要失败回调"""
+        self.log_message.emit(f"AI 摘要异常: {error_msg}")
+
     def _extract_topic_from_summary(self, summary):
         """从摘要中提取会议主题"""
         try:
@@ -799,3 +988,58 @@ class TranscriptionHandler(QObject):
         self._transcribing = False
         self._poll_timer.stop()
         self.log_message.emit("转写已停止")
+
+
+# ══════════════════════════════════════════════════════════
+#  Worker Classes for Async Post-processing
+# ══════════════════════════════════════════════════════════
+
+from PySide6.QtCore import QThread
+
+
+class AICorrectionWorker(QThread):
+    """AI纠错Worker线程"""
+    finished = Signal(str)  # corrected_text
+    error = Signal(str)  # error_message
+
+    def __init__(self, ai_service, raw_text, parent=None):
+        super().__init__(parent)
+        self._ai_service = ai_service
+        self._raw_text = raw_text
+
+    def run(self):
+        try:
+            corrected = self._ai_service.generate_correction(self._raw_text)
+            if corrected:
+                self.finished.emit(corrected)
+            else:
+                self.finished.emit(self._raw_text)
+        except Exception as e:
+            logger.error(f"AI correction failed: {e}")
+            self.error.emit(str(e))
+
+
+class AISummaryWorker(QThread):
+    """AI摘要Worker线程"""
+    finished = Signal(str)  # summary_text
+    error = Signal(str)  # error_message
+
+    def __init__(self, ai_service, transcript, voiceprint_matches=None, parent=None):
+        super().__init__(parent)
+        self._ai_service = ai_service
+        self._transcript = transcript
+        self._voiceprint_matches = voiceprint_matches or {}
+
+    def run(self):
+        try:
+            summary = self._ai_service.generate_summary(
+                self._transcript,
+                voiceprint_matches=self._voiceprint_matches
+            )
+            if summary and not summary.startswith("[错误]"):
+                self.finished.emit(summary)
+            else:
+                self.error.emit(summary or "摘要生成失败")
+        except Exception as e:
+            logger.error(f"AI summary failed: {e}")
+            self.error.emit(str(e))

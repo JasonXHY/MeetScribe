@@ -356,3 +356,94 @@ class TestNaming:
             assert os.path.basename(rec._sys_file) == f"061614会议{SYS_TRACK_SUFFIX}.wav"
         finally:
             rec._recording = False
+
+
+# ── GAP-11：RecordingBar 状态机测试 ───────────────────────────
+
+
+class TestRecordingBarStateMachine:
+    """GAP-11: RecordingBar 状态机测试"""
+
+    def test_initial_idle_state(self, qtbot):
+        """初始状态应为 idle"""
+        from gui.recording_bar import RecordingBar
+        bar = RecordingBar(None, "现场会议")
+        assert bar.record_btn.isEnabled() is True
+        assert bar.stop_btn.isEnabled() is False
+        assert bar.pause_btn.isEnabled() is False
+        assert bar._rec_status_lbl.text() == "准备就绪"
+        assert bar.timer_label.text() == "00:00:00"
+
+    def test_start_recording(self, qtbot):
+        """开始录音后按钮状态"""
+        from gui.recording_bar import RecordingBar
+        bar = RecordingBar(None, "现场会议")
+        bar.update_state(True, False)
+        assert bar.record_btn.isEnabled() is False
+        assert bar.stop_btn.isEnabled() is True
+        assert bar.pause_btn.isEnabled() is True
+        assert bar.pause_btn.text() == "暂停"
+        assert bar._rec_status_lbl.text() == "录音中"
+
+    def test_pause(self, qtbot):
+        """暂停后按钮状态"""
+        from gui.recording_bar import RecordingBar
+        bar = RecordingBar(None, "现场会议")
+        bar.update_state(True, True)
+        assert bar.pause_btn.text() == "继续"
+        assert bar._rec_status_lbl.text() == "已暂停"
+
+    def test_resume(self, qtbot):
+        """恢复录音后按钮状态"""
+        from gui.recording_bar import RecordingBar
+        bar = RecordingBar(None, "现场会议")
+        bar.update_state(True, True)  # pause first
+        bar.update_state(True, False)  # resume
+        assert bar.pause_btn.text() == "暂停"
+        assert bar._rec_status_lbl.text() == "录音中"
+
+    def test_stop_resets_to_idle(self, qtbot):
+        """停止后回到 idle 状态"""
+        from gui.recording_bar import RecordingBar
+        bar = RecordingBar(None, "现场会议")
+        bar.update_state(True, False)  # recording
+        bar.update_state(False, False)  # stop
+        assert bar.record_btn.isEnabled() is True
+        assert bar.stop_btn.isEnabled() is False
+        assert bar._rec_status_lbl.text() == "准备就绪"
+        assert bar.timer_label.text() == "00:00:00"
+
+    def test_paused_without_recording_treated_as_idle(self, qtbot):
+        """paused=True 但 recording=False 应视为 idle"""
+        from gui.recording_bar import RecordingBar
+        bar = RecordingBar(None, "现场会议")
+        bar.update_state(False, True)
+        assert bar.record_btn.isEnabled() is True
+        assert bar._rec_status_lbl.text() == "准备就绪"
+
+    def test_get_mode_mic(self, qtbot):
+        """get_mode() 在现场会议模式下返回 mic"""
+        from gui.recording_bar import RecordingBar
+        bar = RecordingBar(None, "现场会议")
+        assert bar.get_mode() == "mic"
+
+    def test_get_mode_dual(self, qtbot):
+        """get_mode() 在线上会议模式下返回 dual"""
+        from gui.recording_bar import RecordingBar
+        bar = RecordingBar(None, "现场会议")
+        bar.mode_combo.setCurrentText("线上会议")
+        assert bar.get_mode() == "dual"
+
+    def test_update_timer_format(self, qtbot):
+        """update_timer 应正确格式化时间"""
+        from gui.recording_bar import RecordingBar
+        bar = RecordingBar(None, "现场会议")
+        bar.update_timer(3661.5)  # 1h 1m 1.5s
+        assert bar.timer_label.text() == "01:01:01"
+
+    def test_update_queue_status(self, qtbot):
+        """update_queue_status 应更新队列标签"""
+        from gui.recording_bar import RecordingBar
+        bar = RecordingBar(None, "现场会议")
+        bar.update_queue_status("队列: 3 个任务")
+        assert bar._queue_label.text() == "队列: 3 个任务"

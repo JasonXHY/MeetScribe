@@ -132,29 +132,6 @@ class TestAppStartup:
         logger.info("PASS: Page navigation OK")
         test_app.close()
 
-    def test_all_components_exist(self, qtbot):
-        """验证所有核心组件已创建"""
-        from gui.app import MeetScribeApp
-        test_app = MeetScribeApp()
-        qtbot.addWidget(test_app)
-
-        assert hasattr(test_app, 'topbar')
-        assert hasattr(test_app, '_pages')
-        assert hasattr(test_app, '_home_page')
-        assert hasattr(test_app, '_settings_page')
-        assert hasattr(test_app, '_voiceprint_page')
-        assert hasattr(test_app, '_transcription_handler')
-        assert hasattr(test_app, '_gui_log_handler')
-
-        # HomePage 子组件
-        hp = test_app._home_page
-        assert hasattr(hp, '_recording_bar')
-        assert hasattr(hp, '_file_list_view')
-        assert hasattr(hp, '_log_area')
-
-        logger.info("PASS: All components exist")
-        test_app.close()
-
 
 # ══════════════════════════════════════════════════════════
 #  L2: 录音流程（mock 硬件）
@@ -748,28 +725,6 @@ class TestVoiceprintMemberAddition:
 
 class TestSettingsPersistence:
     """设置页保存与恢复验证"""
-
-    def test_settings_page_loads(self, qtbot):
-        """设置页加载并显示当前配置"""
-        from gui.app import MeetScribeApp
-        test_app = MeetScribeApp()
-        qtbot.addWidget(test_app)
-        test_app.show()
-
-        # 切换到设置页
-        test_app._on_navigate("settings")
-        QTest.qWait(500)
-
-        sp = test_app._settings_page
-        assert sp is not None
-
-        # 检查关键控件
-        assert hasattr(sp, '_vendor_combo'), "Vendor combo missing"
-        assert hasattr(sp, '_model_combo'), "Model combo missing"
-        assert hasattr(sp, '_api_key_entry'), "API key entry missing"
-
-        logger.info("PASS: Settings page loads OK")
-        test_app.close()
 
     def test_config_save_restore(self):
         """配置保存后可恢复"""

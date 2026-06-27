@@ -8,11 +8,12 @@ JSON 文件持久化，带默认值
 import os
 import json
 import logging
+from utils import get_data_dir
 
 logger = logging.getLogger("MeetScribe")
 
 # 默认配置
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = get_data_dir()
 DEFAULTS = {
     "recording_dir": os.path.join(PROJECT_ROOT, "recordings"),
     "transcript_dir": os.path.join(PROJECT_ROOT, "transcripts"),
@@ -51,7 +52,7 @@ class Config:
     @staticmethod
     def _get_default_path():
         return os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            get_data_dir(),
             "config", "settings.json"
         )
 

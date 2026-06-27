@@ -14,6 +14,7 @@ import subprocess
 import threading
 from enum import Enum
 from datetime import datetime
+from utils import get_data_dir
 
 logger = logging.getLogger("MeetScribe")
 
@@ -126,10 +127,7 @@ class FileManager:
     """文件列表管理器"""
 
     # 默认数据文件路径（可在 gui.py 中覆盖）
-    DEFAULT_DATA_FILE = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "data", "file_history.json"
-    )
+    DEFAULT_DATA_FILE = os.path.join(get_data_dir(), "data", "file_history.json")
 
     def __init__(self, data_file=None):
         self._files = []  # List[AudioFile]

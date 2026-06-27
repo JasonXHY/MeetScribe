@@ -7,10 +7,19 @@ MeetScribe 工具函数
 """
 
 import os
+import sys
 import re
 import logging
 
 logger = logging.getLogger("MeetScribe")
+
+
+def get_data_dir():
+    """获取用户可写数据目录。打包模式用 %LOCALAPPDATA%\\MeetScribe，开发模式用项目目录。"""
+    if getattr(sys, 'frozen', False):
+        return os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'MeetScribe')
+    # 开发模式：src 的上级目录
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def get_summary_path(transcript_path):

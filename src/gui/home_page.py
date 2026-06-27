@@ -380,8 +380,16 @@ class HomePage(QWidget):
             self._recording_bar.update_state(recording=False, paused=False)
 
     def _stop_recording(self):
-        """停止录音"""
+        """停止录音或停止转写"""
         try:
+            # 优先检查是否在转写中
+            if self._app and hasattr(self._app, '_transcription_handler'):
+                if self._app._transcription_handler.is_transcribing:
+                    self._app._transcription_handler.stop_transcription()
+                    self._recording_bar.update_state(recording=False, paused=False)
+                    self._log("转写已停止")
+                    return
+            # 否则停止录音
             if self._app and hasattr(self._app, 'recorder'):
                 self._app.recorder.stop()
             # 不直接操作 app 状态，让回调统一管理
@@ -558,6 +566,7 @@ class HomePage(QWidget):
         """转写完成回调（home_page 版本）"""
         self._btn_transcribe.setEnabled(True)
         self._btn_transcribe.setText("开始转写")
+        self._btn_ai_summary.setEnabled(True)
         self._recording_bar.stop_btn.setEnabled(False)
         self._recording_bar.stop_btn.setStyleSheet(f"""
             QPushButton {{
@@ -599,7 +608,18 @@ class HomePage(QWidget):
 
     def _on_progress_updated(self, progress):
         """转写进度更新"""
-        if hasattr(progress, 'stage') and hasattr(progress, 'percent'):
+        if isinstance(progress, dict):
+            stage = progress.get("stage", "")
+            percent = progress.get("percent", 0)
+            current = progress.get("current_file", 0)
+            total = progress.get("total_files", 0)
+            text = f"转写中: {stage}"
+            if percent:
+                text += f" ({percent}%)"
+            if total > 0:
+                text += f" [{current}/{total}]"
+            self._recording_bar.update_queue_status(text)
+        elif hasattr(progress, 'stage') and hasattr(progress, 'percent'):
             self._recording_bar.update_queue_status(f"转写中: {progress.stage} ({progress.percent}%)")
 
     def _preview_result(self, file_path):
@@ -942,6 +962,7 @@ class HomePage(QWidget):
                 handler.start(all_paths, fmt, {}, "")
                 self._btn_transcribe.setEnabled(False)
                 self._btn_transcribe.setText("转写中...")
+                self._btn_ai_summary.setEnabled(False)
                 self._recording_bar.stop_btn.setEnabled(True)
                 self._recording_bar.stop_btn.setStyleSheet(f"""
                     QPushButton {{

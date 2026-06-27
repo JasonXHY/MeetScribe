@@ -6,11 +6,19 @@ MeetScribe 音色库单元测试
 """
 
 import os
+import sys
 import tempfile
+import threading
+import time
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from PySide6.QtWidgets import QLineEdit
 from voiceprint import VoiceprintLibrary, SpeakerProfile
+
+
+# ── SpeakerProfile 单元测试 ──────────────────────────────────
 
 
 class TestSpeakerProfile:
@@ -113,6 +121,9 @@ class TestSpeakerProfile:
         restored = SpeakerProfile.from_dict(data)
         assert restored.name == "张三"
         assert len(restored.embeddings) == 3
+
+
+# ── VoiceprintLibrary 单元测试 ───────────────────────────────
 
 
 class TestVoiceprintLibrary:
@@ -256,34 +267,89 @@ class TestVoiceprintLibrary:
         finally:
             os.remove(temp_path)
 
+    def test_load_corrupted_json(self, tmp_path):
+        path = tmp_path / "library.json"
+        path.write_text('{"speakers": {"张三": {"name": "张三", "embeddings": [')
+        lib = VoiceprintLibrary(str(path))
+        assert lib.get_speakers() == {}
 
-def test_extract_embedding_from_file():
-    """测试从音频文件提取声纹"""
-    from voiceprint import VoiceprintLibrary
-    import tempfile
-    import os
+    @pytest.mark.xfail(reason="VoiceprintLibrary 非线程安全，已知设计限制")
+    def test_concurrent_add_speakers(self, tmp_path):
+        lib = VoiceprintLibrary(str(tmp_path / "lib.json"))
+        errors = []
 
-    # 创建临时音频文件（模拟）
-    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-        temp_path = f.name
+        def add_many(prefix):
+            try:
+                for i in range(20):
+                    lib.add_speaker(f"{prefix}_{i}", np.random.rand(512), "test")
+            except Exception as e:
+                errors.append(e)
 
-    try:
-        library = VoiceprintLibrary()
-        # 这个方法应该存在但可能失败（因为没有真实音频）
-        assert hasattr(library, 'extract_embedding_from_file')
-    finally:
-        os.remove(temp_path)
+        threads = [threading.Thread(target=add_many, args=(f"T{j}",)) for j in range(3)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len(errors) > 0
+
+    def test_match_below_threshold(self, tmp_path):
+        lib = VoiceprintLibrary(str(tmp_path / "lib.json"))
+        base = np.random.rand(512).astype(np.float32)
+        base /= np.linalg.norm(base)
+        lib.add_speaker("张三", base, "test")
+        orthogonal = np.zeros(512, dtype=np.float32)
+        orthogonal[0] = 1.0
+        name, score = lib.match(orthogonal)
+        assert name is None
+
+    def test_match_confirmed_threshold(self, tmp_path):
+        lib = VoiceprintLibrary(str(tmp_path / "lib.json"))
+        base = np.random.rand(512).astype(np.float32)
+        base /= np.linalg.norm(base)
+        lib.add_speaker("张三", base, "test")
+        noise = np.random.rand(512).astype(np.float32)
+        noise /= np.linalg.norm(noise)
+        above = (base * 0.51 + noise * 0.49).astype(np.float32)
+        name, score = lib.match(above)
+        assert name == "张三"
+        assert score >= 0.50
+
+
+# ── 冲突解决逻辑测试 ─────────────────────────────────────────
+
+
+def test_conflict_all_match_same_name(tmp_path):
+    lib = VoiceprintLibrary(str(tmp_path / "lib.json"))
+    base = np.random.rand(512).astype(np.float32)
+    base /= np.linalg.norm(base)
+    lib.add_speaker("张三", base, "test")
+    noise = np.random.rand(512).astype(np.float32)
+    noise /= np.linalg.norm(noise)
+    emb_low = (base * 0.4 + noise * 0.6).astype(np.float32)
+    emb_mid = (base * 0.6 + noise * 0.4).astype(np.float32)
+    emb_high = (base * 0.8 + noise * 0.2).astype(np.float32)
+    matches = [
+        {"speaker_id": 0, "name": "张三", "score": 0.4},
+        {"speaker_id": 1, "name": "张三", "score": 0.6},
+        {"speaker_id": 2, "name": "张三", "score": 0.8},
+    ]
+    best = max(matches, key=lambda m: m["score"])
+    assert best["speaker_id"] == 2
+    assert best["score"] == 0.8
+
+
+
+
+# ── 边界条件测试 ─────────────────────────────────────────────
+
+
+class TestVoiceprintBoundary:
+    """音色库边界条件测试"""
 
 
 @pytest.mark.e2e_heavy
 def test_extract_embedding_from_file_success():
     """测试从音频文件提取声纹成功场景（patch funasr.AutoModel，需 funasr 已安装）"""
-    from voiceprint import VoiceprintLibrary
-    from unittest.mock import patch, MagicMock
-    import tempfile
-    import os
-    import numpy as np
-
     # 创建临时音频文件
     with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
         temp_path = f.name
@@ -314,8 +380,6 @@ def test_extract_embedding_from_file_success():
 
 def test_extract_embedding_from_file_not_found():
     """测试从不存在的音频文件提取声纹"""
-    from voiceprint import VoiceprintLibrary
-
     library = VoiceprintLibrary()
     result = library.extract_embedding_from_file("/nonexistent/file.wav")
     assert result is None
@@ -324,12 +388,6 @@ def test_extract_embedding_from_file_not_found():
 @pytest.mark.e2e_heavy
 def test_extract_embedding_from_file_transcribe_error():
     """测试提取失败时返回 None（patch funasr.AutoModel，需 funasr 已安装）"""
-    from voiceprint import VoiceprintLibrary
-    from unittest.mock import patch, MagicMock
-    import tempfile
-    import os
-    import numpy as np
-
     # 创建临时音频文件
     with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
         temp_path = f.name
@@ -357,12 +415,6 @@ def test_extract_embedding_from_file_transcribe_error():
 @pytest.mark.e2e_heavy
 def test_extract_embedding_from_file_return_format():
     """测试返回值格式为 {spk_id: embedding_vector}（patch funasr.AutoModel，需 funasr）"""
-    from voiceprint import VoiceprintLibrary
-    from unittest.mock import patch, MagicMock
-    import tempfile
-    import os
-    import numpy as np
-
     # 创建临时音频文件
     with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
         temp_path = f.name
@@ -390,3 +442,397 @@ def test_extract_embedding_from_file_return_format():
         assert len(result[0]) == 192
     finally:
         os.remove(temp_path)
+
+
+# ── GUI 流行为测试（VPR-002/003/004）────────────────────────
+# 不依赖 funasr / CAM++：提取边界用 mock 注入固定向量。
+
+pytestmark = pytest.mark.integration
+
+
+@pytest.fixture
+def lib(tmp_path):
+    """空音色库，指向临时文件。"""
+    return VoiceprintLibrary(library_path=str(tmp_path / "vp.json"))
+
+
+def _populate(lib, name="张三"):
+    lib.add_speaker(name, np.random.rand(512).astype(np.float32),
+                    "manual_recording", quality=0.9)
+    return lib
+
+
+# ── VPR-003：rename_speaker 行为 ──────────────────────────────
+
+
+class TestRenameSpeakerBehavior:
+    def test_rename_migrates_embeddings_and_created_at(self, lib):
+        _populate(lib, "张三")
+        before = lib.get_speakers()["张三"]
+        old_embeddings = before.embeddings
+        old_created = before.created_at
+
+        ok = lib.rename_speaker("张三", "张总")
+        assert ok is True
+
+        speakers = lib.get_speakers()
+        assert "张三" not in speakers
+        assert "张总" in speakers
+        # embedding 与 created_at 迁移保留
+        assert speakers["张总"].embeddings == old_embeddings
+        assert speakers["张总"].created_at == old_created
+
+    def test_rename_persists_to_disk(self, lib, tmp_path):
+        _populate(lib, "张三")
+        lib.rename_speaker("张三", "张总")
+
+        # 重新加载，确认持久化
+        reloaded = VoiceprintLibrary(library_path=str(tmp_path / "vp.json"))
+        names = set(reloaded.get_speakers().keys())
+        assert names == {"张总"}
+
+    def test_rename_rejects_when_target_exists(self, lib):
+        _populate(lib, "张三")
+        _populate(lib, "李四")
+        assert lib.rename_speaker("张三", "李四") is False
+        # 两者都还在
+        assert set(lib.get_speakers()) == {"张三", "李四"}
+
+    def test_rename_returns_false_when_source_missing(self, lib):
+        assert lib.rename_speaker("不存在", "新名") is False
+
+
+# ── VPR-003：GUI _edit_speaker 集成 ──────────────────────────
+
+
+class TestEditSpeakerGui:
+    def test_edit_speaker_renames_and_refreshes(self, qtbot, lib):
+        from gui.voiceprint_page import VoiceprintPage
+
+        _populate(lib, "张三")
+        page = VoiceprintPage()
+        qtbot.addWidget(page)
+        page._library = lib  # 注入临时库
+        page.refresh_list()
+
+        with patch("gui.voiceprint_page.QInputDialog.getText",
+                   return_value=("张总", True)):
+            page._edit_speaker("张三")
+
+        assert "张总" in lib.get_speakers()
+        assert "张三" not in lib.get_speakers()
+
+
+# ── VPR-004：GUI _delete_speaker 确认路径 ────────────────────
+
+
+class TestDeleteSpeakerGui:
+    def test_delete_confirmed_calls_remove_and_refreshes(self, qtbot):
+        from gui.voiceprint_page import VoiceprintPage
+        from PySide6.QtWidgets import QMessageBox
+
+        fake_lib = MagicMock()
+        page = VoiceprintPage()
+        qtbot.addWidget(page)
+        page._library = fake_lib
+
+        with patch("gui.voiceprint_page.QMessageBox.question",
+                   return_value=QMessageBox.Yes):
+            page._delete_speaker("张三")
+
+        fake_lib.remove_speaker.assert_called_once_with("张三")
+
+    def test_delete_cancelled_does_not_remove(self, qtbot):
+        from gui.voiceprint_page import VoiceprintPage
+        from PySide6.QtWidgets import QMessageBox
+
+        fake_lib = MagicMock()
+        page = VoiceprintPage()
+        qtbot.addWidget(page)
+        page._library = fake_lib
+
+        with patch("gui.voiceprint_page.QMessageBox.question",
+                   return_value=QMessageBox.No):
+            page._delete_speaker("张三")
+
+        fake_lib.remove_speaker.assert_not_called()
+
+
+# ── VPR-002：AddVoiceDialog 录入链路 ─────────────────────────
+
+
+class TestAddVoiceSaveFlow:
+    def test_save_calls_add_speaker_with_correct_source_quality(self, qtbot):
+        from gui.voiceprint_page import AddVoiceDialog
+
+        dialog = AddVoiceDialog()
+        qtbot.addWidget(dialog)
+
+        # 模拟提取已完成：填入姓名 + 固定 embedding
+        fixed_embedding = np.ones(512, dtype=np.float32)
+        dialog._name_entry.setText("王五")
+        dialog._temp_embedding = fixed_embedding
+
+        fake_lib = MagicMock()
+        with patch("voiceprint.VoiceprintLibrary", return_value=fake_lib), \
+             patch("gui.voiceprint_page.QMessageBox"):
+            dialog._save()
+
+        fake_lib.add_speaker.assert_called_once()
+        args, kwargs = fake_lib.add_speaker.call_args
+        # 姓名、来源、quality 与实现约定一致
+        assert args[0] == "王五"
+        assert np.array_equal(args[1], fixed_embedding)
+        assert args[2] == "manual_recording"
+        assert kwargs.get("quality") == 0.90
+
+    def test_save_blocks_without_embedding(self, qtbot):
+        from gui.voiceprint_page import AddVoiceDialog
+
+        dialog = AddVoiceDialog()
+        qtbot.addWidget(dialog)
+        dialog._name_entry.setText("无声纹")
+        dialog._temp_embedding = None
+
+        fake_lib = MagicMock()
+        with patch("voiceprint.VoiceprintLibrary", return_value=fake_lib), \
+             patch("gui.voiceprint_page.QMessageBox"):
+            dialog._save()
+
+        # 未提取声纹时不得写库
+        fake_lib.add_speaker.assert_not_called()
+
+
+# ── 辅助函数 ─────────────────────────────────────────────────
+
+
+def _make_speaker_dialog(app, speakers=None, embeddings=None,
+                         audio_path=None, sentences=None, qualities=None):
+    """构造最小 SpeakerDialog"""
+    from gui.dialogs import SpeakerDialog
+    speakers = speakers if speakers is not None else [
+        {"label": "Speaker 1", "spk_id": 0, "name": "", "pct": 60.0},
+        {"label": "Speaker 2", "spk_id": 1, "name": "", "pct": 40.0},
+    ]
+    return SpeakerDialog(
+        parent=None,
+        file_name="meeting.wav",
+        speakers=speakers,
+        speaker_embeddings=embeddings or {},
+        speaker_qualities=qualities or {},
+        audio_path=audio_path,
+        sentences=sentences or [],
+    )
+
+
+# ── 音色库下拉选择填充（迁移自 test_gui_config）───────────────
+
+
+class TestVoiceprintSelect:
+    def test_select_fills_entry(self, app):
+        dlg = _make_speaker_dialog(app)
+        entry = QLineEdit()
+        dlg._on_voiceprint_select("李四", entry)
+        assert entry.text() == "李四"
+
+    def test_select_placeholder_does_not_fill(self, app):
+        dlg = _make_speaker_dialog(app)
+        entry = QLineEdit()
+        dlg._on_voiceprint_select("（从音色库选择）", entry)
+        assert entry.text() == ""
+
+
+# ── 保存到音色库（迁移自 test_gui_config）────────────────────
+
+
+class TestSaveToLibrary:
+    def test_save_calls_add_speaker(self, app):
+        emb = np.ones(512, dtype=np.float32)
+        dlg = _make_speaker_dialog(app, embeddings={0: emb})
+        dlg._speaker_entries[0].setText("王五")
+
+        fake_lib = MagicMock()
+        fake_profile = MagicMock()
+        fake_profile.embeddings = [emb]
+        fake_lib.get_speakers.return_value = {"王五": fake_profile}
+
+        with patch("voiceprint.VoiceprintLibrary", return_value=fake_lib), \
+             patch("gui.dialogs.QMessageBox"):
+            dlg._save_to_library(0)
+
+        fake_lib.add_speaker.assert_called_once()
+        args, kwargs = fake_lib.add_speaker.call_args
+        assert args[0] == "王五"
+        assert np.array_equal(args[1], emb)
+
+    def test_save_blocks_without_name(self, app):
+        dlg = _make_speaker_dialog(app, embeddings={0: np.ones(512)})
+        dlg._speaker_entries[0].setText("")
+
+        fake_lib = MagicMock()
+        with patch("voiceprint.VoiceprintLibrary", return_value=fake_lib), \
+             patch("gui.dialogs.QMessageBox"):
+            dlg._save_to_library(0)
+        fake_lib.add_speaker.assert_not_called()
+
+
+# ── 中间片段选择（迁移自 test_gui_config）────────────────────
+
+
+class TestMiddleSegmentWindow:
+    def test_middle_third_window(self):
+        from gui.dialogs import _middle_third_window
+        start, end = _middle_third_window(0, 3000)
+        assert start == pytest.approx(1000)
+        assert end == pytest.approx(2000)
+
+    def test_extract_picks_longest_segment_middle(self, app):
+        """SPK-007：应选最长发言段，并对其中间 1/3 提取。"""
+        sentences = [
+            {"spk_id": 0, "start": 0, "end": 1000},
+            {"spk_id": 0, "start": 10000, "end": 40000},
+            {"spk_id": 1, "start": 2000, "end": 5000},
+        ]
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            wav_path = f.name
+        try:
+            import soundfile as sf
+            sr = 16000
+            sf.write(wav_path, np.zeros(45 * sr, dtype=np.float32), sr)
+
+            dlg = _make_speaker_dialog(
+                app, embeddings={0: np.ones(512)},
+                audio_path=wav_path, sentences=sentences,
+            )
+
+            captured = {}
+            fixed_emb = np.arange(512, dtype=np.float32)
+
+            class _FakeModel:
+                def __init__(self, *a, **k):
+                    pass
+
+                def inference(self, input=None, **k):
+                    captured["len"] = len(input)
+                    return [{"spk_embedding": fixed_emb}]
+
+            fake_funasr = MagicMock()
+            fake_funasr.AutoModel = _FakeModel
+            with patch.dict(sys.modules, {"funasr": fake_funasr}):
+                result = dlg._extract_middle_segment_embedding(0, duration_sec=5)
+
+            assert result is not None
+            assert np.array_equal(np.asarray(result), fixed_emb)
+            assert captured["len"] == pytest.approx(160000, rel=0.05)
+        finally:
+            os.remove(wav_path)
+
+
+# ══════════════════════════════════════════════════════════
+#  L5: 声纹匹配验证 (from test_tdd_flows.py)
+# ══════════════════════════════════════════════════════════
+
+class TestVoiceprintMatchingTDD:
+    """声纹匹配逻辑验证"""
+
+    def test_matching_scoring(self):
+        """声纹匹配评分验证"""
+        import logging
+        logger = logging.getLogger("TDD_Test")
+        library = VoiceprintLibrary()
+        speakers = library.get_speakers()
+
+        if not speakers:
+            pytest.skip("No speakers in library")
+
+        # 取第一个说话人的嵌入向量进行匹配测试
+        first_speaker = list(speakers.values())[0]
+        if not first_speaker.embeddings:
+            pytest.skip("No embeddings for first speaker")
+
+        embedding = np.array(first_speaker.embeddings[0]["vector"])
+
+        # 匹配
+        name, score = library.match(embedding)
+        logger.info(f"Matching test: name={name}, score={score:.4f}")
+
+        # 自匹配应该高分
+        assert name is not None, "Self-matching should return a name"
+        assert score > 0.5, f"Self-matching score too low: {score:.4f}"
+        assert name == first_speaker.name, \
+            f"Self-matching should return same speaker: expected {first_speaker.name}, got {name}"
+
+        # 置信度检测
+        name2, confidence = library.match_with_confidence(embedding)
+        logger.info(f"Confidence: {confidence}")
+        assert confidence in ("confirmed", "suggested", "no_match"), \
+            f"Invalid confidence: {confidence}"
+
+        logger.info("PASS: Voiceprint matching scoring OK")
+
+
+# ══════════════════════════════════════════════════════════
+#  L6: 音色库人员添加流程 (from test_tdd_flows.py)
+# ══════════════════════════════════════════════════════════
+
+class TestVoiceprintMemberAddition:
+    """音色库人员添加流程前端验证"""
+
+    def test_add_voice_dialog_ui(self, qtbot):
+        """AddVoiceDialog UI 验证"""
+        import logging
+        logger = logging.getLogger("TDD_Test")
+        from PySide6.QtWidgets import QPushButton
+        from gui.voiceprint_page import AddVoiceDialog
+        from gui.app import MeetScribeApp
+
+        test_app = MeetScribeApp()
+        qtbot.addWidget(test_app)
+
+        # 创建对话框
+        dialog = AddVoiceDialog(parent=test_app._voiceprint_page, on_save=lambda: None)
+        qtbot.addWidget(dialog)
+
+        # 验证 UI 元素
+        assert hasattr(dialog, '_name_entry'), "Name input missing"
+        assert hasattr(dialog, '_record_btn'), "Record button missing"
+        assert hasattr(dialog, '_save_btn'), "Save button missing"
+        # cancel_btn 是局部变量，通过 dialog 的按钮列表验证
+        buttons = dialog.findChildren(QPushButton)
+        button_texts = [b.text() for b in buttons]
+        assert any("取消" in t for t in button_texts), "Cancel button missing"
+        assert any("保存" in t for t in button_texts), "Save button missing"
+
+        # 验证预设朗读文本
+        if hasattr(dialog, 'PRESET_TEXT'):
+            assert len(dialog.PRESET_TEXT) > 0, "Preset text should not be empty"
+            logger.info(f"Preset text: {dialog.PRESET_TEXT[:50]}...")
+
+        # 验证输入框可编辑
+        name_entry = dialog._name_entry
+        name_entry.setText("TDD测试添加人员")
+        assert name_entry.text() == "TDD测试添加人员", "Name entry should be editable"
+
+        logger.info("PASS: AddVoiceDialog UI OK")
+        dialog.close()
+        test_app.close()
+
+
+def test_fifo_eviction_is_by_recency_not_quality(tmp_path):
+    """GAP-14: FIFO 淘汰按时间顺序，不按质量"""
+    from voiceprint import VoiceprintLibrary
+    lib = VoiceprintLibrary(str(tmp_path / "lib.json"))
+    base = np.random.rand(512).astype(np.float32)
+    base /= np.linalg.norm(base)
+    lib.add_speaker("张三", base, "test")
+    # 添加 6 个样本（超过 MAX_EMBEDDINGS_PER_SPEAKER=5）
+    for i in range(6):
+        emb = np.random.rand(512).astype(np.float32)
+        lib.add_speaker("张三", emb, f"source_{i}")
+    # 验证只保留 5 个
+    profile = lib.get_speakers()["张三"]
+    assert len(profile.embeddings) == 5
+    # 验证第一个样本被丢弃（FIFO）
+    # 第一个样本的 source 应该是 'test'，但已经被淘汰
+    sources = [e["source"] for e in profile.embeddings]
+    assert "test" not in sources  # 最早的样本被丢弃

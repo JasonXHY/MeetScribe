@@ -6,6 +6,7 @@
 import os
 import sys
 import logging
+from logging.handlers import RotatingFileHandler
 import multiprocessing
 import traceback
 
@@ -14,14 +15,15 @@ SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-# ── 项目根目录 ──
-PROJECT_ROOT = os.path.dirname(SRC_DIR)
+# ── 数据目录（打包模式用 %LOCALAPPDATA%，开发模式用项目目录） ──
+from utils import get_data_dir
+DATA_DIR = get_data_dir()
 
 # ── 启动时预创建必要目录 ──
 for _dir in ("logs", "config", "data", "recordings", "transcripts"):
-    os.makedirs(os.path.join(PROJECT_ROOT, _dir), exist_ok=True)
+    os.makedirs(os.path.join(DATA_DIR, _dir), exist_ok=True)
 
-LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
+LOG_DIR = os.path.join(DATA_DIR, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "meetscribe.log")
 
 
@@ -40,8 +42,8 @@ def setup_logging():
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    # 文件 handler（UTF-8，追加模式）
-    file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8", mode="a")
+    # 文件 handler（UTF-8，轮转：最大 5MB，保留 3 个备份）
+    file_handler = RotatingFileHandler(LOG_FILE, encoding="utf-8", maxBytes=5*1024*1024, backupCount=3)
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(fmt)
     root_logger.addHandler(file_handler)

@@ -57,6 +57,8 @@ class FirstLaunchDialog(QDialog):
     # 信号：通知外部使用内置 API 或跳转设置
     use_builtin_api = Signal()
     go_to_settings = Signal()
+    # 后台下载启动信号：传递 worker 实例给外部管理
+    background_download_started = Signal(object)
 
     def __init__(self, parent=None, config=None):
         super().__init__(parent)
@@ -242,7 +244,18 @@ class FirstLaunchDialog(QDialog):
         self._download_btn.setStyleSheet(self._accent_btn_style())
         self._download_btn.setCursor(Qt.PointingHandCursor)
         self._download_btn.clicked.connect(self._start_download)
-        v.addWidget(self._download_btn, 0, Qt.AlignLeft)
+
+        self._bg_download_btn = QPushButton("后台下载，先去设置")
+        self._bg_download_btn.setFixedSize(160, 36)
+        self._bg_download_btn.setStyleSheet(self._ghost_btn_style())
+        self._bg_download_btn.setCursor(Qt.PointingHandCursor)
+        self._bg_download_btn.clicked.connect(self._start_background_download)
+
+        dl_btn_layout = QHBoxLayout()
+        dl_btn_layout.addWidget(self._download_btn)
+        dl_btn_layout.addWidget(self._bg_download_btn)
+        dl_btn_layout.addStretch()
+        v.addLayout(dl_btn_layout)
 
         v.addStretch()
         return page
@@ -315,18 +328,25 @@ class FirstLaunchDialog(QDialog):
     # ── Step 2 动作 ──────────────────────────────────────
 
     def _start_download(self):
-        """启动模型下载"""
+        """启动模型下载（阻塞等待）"""
         self._progress_bar.setVisible(True)
         self._progress_bar.setRange(0, 0)
         self._progress_label.setVisible(True)
         self._progress_label.setText("准备下载...")
         self._download_btn.setEnabled(False)
         self._download_btn.setText("下载中...")
+        self._bg_download_btn.setEnabled(False)
 
         self._worker = ModelDownloadWorker(self._model_dir)
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_download_finished)
         self._worker.start()
+
+    def _start_background_download(self):
+        """启动模型下载（后台运行，立即关闭弹窗）"""
+        worker = ModelDownloadWorker(self._model_dir)
+        self.background_download_started.emit(worker)
+        self._finish()
 
     def _on_progress(self, percent, message):
         if percent > 0:

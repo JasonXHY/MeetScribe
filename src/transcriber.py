@@ -15,6 +15,7 @@ import html
 import logging
 import subprocess
 import tempfile
+import threading
 from datetime import datetime
 
 from gui.styles import SPEAKER_COLORS
@@ -98,6 +99,16 @@ def _setup_modelscope_cache(cache_dir):
         return
     os.environ["MODELSCOPE_CACHE"] = cache_dir
     os.environ.setdefault("MODELSCOPE_SCENARIO", "cli")
+
+    # 增大 SDK 超时（默认 60s 对慢速网络不够）
+    # 依赖 modelscope.hub.constants，版本变化时静默跳过
+    try:
+        import modelscope.hub.constants as hc
+        hc.API_FILE_DOWNLOAD_TIMEOUT = 180  # per-socket-read: 180s
+        hc.API_HTTP_CLIENT_TIMEOUT = 180    # 连接+API调用: 180s
+    except (ImportError, AttributeError):
+        pass
+
     _MODELSCOPE_CACHE_SET = True
     logger.info(f"MODELSCOPE_CACHE set to: {cache_dir}")
 
@@ -129,6 +140,8 @@ def _resolve_model_path(model_id, cache_dir):
 
 class ModelManager:
     """模型管理器 - 检查、下载、状态记录"""
+
+    _download_lock = threading.Lock()
 
     def __init__(self, cache_dir):
         self.cache_dir = cache_dir
@@ -222,7 +235,7 @@ class ModelManager:
                 missing.append(model_id)
         return missing
 
-    def download_model(self, model_id, progress_callback=None):
+    def download_model(self, model_id, progress_callback=None, max_retries=3):
         """
         下载指定模型
 
@@ -232,37 +245,78 @@ class ModelManager:
         if model_id not in REQUIRED_MODELS:
             return False, f"未知模型: {model_id}"
 
-        info = REQUIRED_MODELS[model_id]
-        local_path = self._get_model_path(model_id)
+        if not self._download_lock.acquire(blocking=False):
+            return False, "已有下载任务正在进行"
 
-        # 检查是否已完整缓存（不做空目录短路返回）
+        try:
+            return self._download_model_inner(model_id, progress_callback, max_retries)
+        finally:
+            self._download_lock.release()
+
+    def _download_model_inner(self, model_id, progress_callback, max_retries):
+        info = REQUIRED_MODELS[model_id]
+
+        # 检查是否已完整缓存
         status = self.check_all_models()
         if status.get(model_id, {}).get("cached"):
             return True, f"模型 {model_id} 已在本地缓存"
 
-        if progress_callback:
-            progress_callback(f"正在下载 {model_id} ({info['size_hint']})...")
+        last_error = None
+        for attempt in range(max_retries):
+            if attempt > 0:
+                wait = 2 ** attempt  # 1s, 2s, 4s
+                logger.warning(f"下载 {model_id} 失败，{wait}s 后重试 ({attempt+1}/{max_retries})")
+                if progress_callback:
+                    progress_callback(f"下载失败，{wait}s 后重试...")
+                time.sleep(wait)
 
-        try:
-            _setup_modelscope_cache(self.cache_dir)
-            from modelscope import snapshot_download
-            ms_id = info["ms_id"]
-            model_name = ms_id.split("/")[-1] if "/" in ms_id else ms_id
-            snapshot_download(ms_id, cache_dir=self.cache_dir)
+            if progress_callback:
+                progress_callback(f"正在下载 {model_id} ({info['size_hint']})...")
 
-            # 下载后校验完整性
-            status = self.check_all_models()
-            if status.get(model_id, {}).get("cached"):
-                return True, f"模型 {model_id} 下载完成且验证通过"
-            else:
-                aux = status.get(model_id, {}).get("aux_missing", [])
-                if aux:
-                    return False, f"下载不完整：缺少辅助文件 {', '.join(aux)}"
-                return False, f"下载不完整：模型 {model_id} 未通过完整性校验"
+            try:
+                _setup_modelscope_cache(self.cache_dir)
+                from modelscope import snapshot_download
+                ms_id = info["ms_id"]
+                snapshot_download(ms_id, cache_dir=self.cache_dir)
 
-        except Exception as e:
-            logger.error(f"下载模型 {model_id} 失败: {e}")
-            return False, f"下载失败: {e}"
+                # 下载后校验完整性
+                status = self.check_all_models()
+                if status.get(model_id, {}).get("cached"):
+                    return True, f"模型 {model_id} 下载完成且验证通过"
+                else:
+                    aux = status.get(model_id, {}).get("aux_missing", [])
+                    if aux:
+                        last_error = f"下载不完整：缺少辅助文件 {', '.join(aux)}"
+                    else:
+                        last_error = f"下载不完整：模型 {model_id} 未通过完整性校验"
+
+            except Exception as e:
+                last_error = self._classify_download_error(e)
+
+        logger.error(f"下载模型 {model_id} 失败（已重试 {max_retries} 次）: {last_error}")
+        return False, last_error
+
+    @staticmethod
+    def _classify_download_error(e):
+        error_str = str(e).lower()
+        error_type = type(e).__name__
+
+        if "timeout" in error_str or "timed out" in error_str:
+            return "下载超时，请检查网络连接后重试"
+        elif "connection" in error_str or "connectionrefused" in error_str:
+            return "无法连接到下载服务器，请检查网络"
+        elif "ssl" in error_str or "certificate" in error_str:
+            return "SSL 证书验证失败，可能是公司网络代理导致，请检查网络环境"
+        elif "quota" in error_str or "rate limit" in error_str:
+            return "下载频率超限，请稍后重试"
+        elif "disk" in error_str or "no space" in error_str:
+            return "磁盘空间不足，请清理后重试"
+        elif "permission" in error_str or "access denied" in error_str:
+            return "没有写入权限，请以管理员身份运行"
+        elif error_type == "FileDownloadError":
+            return f"文件下载失败: {e}"
+        else:
+            return f"下载失败: {e}"
 
     def download_all_missing(self, progress_callback=None):
         """下载所有缺失的必需模型"""
@@ -1062,11 +1116,15 @@ class Transcriber:
 
         logger.debug(f"[SPK-EMB-PER] Found {len(spk_segments)} speakers: {list(spk_segments.keys())}")
 
-        # 2. 加载 CAM++ 模型
+        # 2. 加载 CAM++ 模型（使用本地路径，避免每次触发 ModelScope 下载）
         try:
             _patch_funasr_campplus()
             from funasr import AutoModel
-            model_spk = AutoModel(model="cam++", device=self.device, disable_update=True)
+            campp_path = _resolve_model_path("cam++", self.model_cache_dir)
+            if campp_path:
+                model_spk = AutoModel(model=campp_path, device=self.device, disable_update=True)
+            else:
+                model_spk = AutoModel(model="cam++", device=self.device, disable_update=True)
         except Exception as e:
             logger.error(f"[SPK-EMB-PER] Failed to load CAM++ model: {e}")
             return embeddings

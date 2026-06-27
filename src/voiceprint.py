@@ -10,6 +10,7 @@ import json
 import logging
 import numpy as np
 from datetime import datetime
+from utils import get_data_dir
 
 logger = logging.getLogger("MeetScribe")
 
@@ -136,7 +137,7 @@ class VoiceprintLibrary:
 
     def __init__(self, library_path=None):
         self.library_path = library_path or os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "data", "voiceprint_library.json"
+            get_data_dir(), "data", "voiceprint_library.json"
         )
         self._speakers = {}  # {name: SpeakerProfile}
         self._loaded = False

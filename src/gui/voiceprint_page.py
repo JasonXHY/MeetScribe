@@ -58,7 +58,7 @@ class AddVoiceDialog(QDialog):
 
     PRESET_TEXT = "你好，我是{姓名}，这是我的声纹样本。"
 
-    def __init__(self, parent=None, on_save=None):
+    def __init__(self, parent=None, on_save=None, voiceprint_lib=None):
         super().__init__(parent)
         self.setWindowTitle("添加新说话人")
         self.setFixedSize(440, 380)
@@ -71,6 +71,7 @@ class AddVoiceDialog(QDialog):
         self._audio_path = None
         self._temp_dir = None
         self._embedding = None
+        self._voiceprint_lib = voiceprint_lib
 
         self._build()
 
@@ -769,7 +770,7 @@ class VoiceprintPage(QWidget):
 
     def _add_speaker(self):
         """添加说话人"""
-        dialog = AddVoiceDialog(parent=self, on_save=self.refresh_list)
+        dialog = AddVoiceDialog(parent=self, on_save=self.refresh_list, voiceprint_lib=self._get_library())
         dialog.exec()
 
     def _edit_speaker(self, old_name):

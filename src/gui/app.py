@@ -34,6 +34,7 @@ if SRC_DIR not in sys.path:
 from config import Config
 from file_manager import FileManager
 from unified_recorder import UnifiedRecorder
+from utils import get_data_dir
 
 logger = logging.getLogger("MeetScribe")
 
@@ -84,6 +85,7 @@ class MeetScribeApp(QMainWindow):
 
     # 跨线程信号：后台线程通过此信号通知主线程执行操作
     stop_complete_signal = Signal(list)
+    recorder_state_signal = Signal(bool, bool)
 
     def __init__(self):
         try:
@@ -117,13 +119,13 @@ class MeetScribeApp(QMainWindow):
             self._gui_log_handler = GUILogHandler()
 
             # 初始化业务逻辑
-            config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "settings.json")
+            config_path = os.path.join(get_data_dir(), "config", "settings.json")
             self.config = Config(config_path)
             self.file_manager = FileManager()
             logger.debug("Config and FileManager initialized")
 
             # 初始化录音模块
-            recording_dir = self.config.get("recording_dir", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "recordings"))
+            recording_dir = self.config.get("recording_dir", os.path.join(get_data_dir(), "recordings"))
             os.makedirs(recording_dir, exist_ok=True)
             self.recorder = UnifiedRecorder(
                 save_dir=recording_dir,
@@ -139,6 +141,7 @@ class MeetScribeApp(QMainWindow):
             self.recorder.on_stop_complete = self._on_recorder_stop_complete
             # 信号槽连接：后台线程通过信号安全通知主线程
             self.stop_complete_signal.connect(self._handle_stop_complete)
+            self.recorder_state_signal.connect(self._on_recorder_state_change_safe)
             logger.debug("UnifiedRecorder initialized with callbacks")
 
             # 转写调度器
@@ -274,13 +277,35 @@ class MeetScribeApp(QMainWindow):
         def on_go_to_settings():
             self._on_navigate("settings")
 
+        def on_background_download(worker):
+            self._bg_download_worker = worker
+            worker.progress.connect(self._on_bg_download_progress)
+            worker.finished.connect(self._on_bg_download_finished)
+            worker.start()
+            self._status_lbl.setText("模型下载中...")
+
         dialog.use_builtin_api.connect(on_use_builtin)
         dialog.go_to_settings.connect(on_go_to_settings)
+        dialog.background_download_started.connect(on_background_download)
         dialog.exec()
 
         # 兜底：即使对话框被强制关闭，也标记已完成首次启动
         self.config.set("first_launch", False)
         self.config.save()
+
+    def _on_bg_download_progress(self, percent, message):
+        """后台下载进度更新"""
+        self._status_lbl.setText(f"模型下载: {message}")
+
+    def _on_bg_download_finished(self, success, message):
+        """后台下载完成"""
+        self._bg_download_worker = None
+        if success:
+            self._status_lbl.setText("模型下载完成")
+            self._log(f"模型下载完成: {message}")
+        else:
+            self._status_lbl.setText(f"模型下载失败: {message}")
+            self._log(f"模型下载失败: {message}")
 
     def _on_settings_changed(self):
         """设置变更回调"""
@@ -353,7 +378,11 @@ class MeetScribeApp(QMainWindow):
     # ══════════════════════════════════════════════════════════
 
     def _on_recorder_state_change(self, is_recording, is_paused):
-        """录音状态变更回调"""
+        """录音状态变更回调（后台线程调用，通过信号安全通知主线程）"""
+        self.recorder_state_signal.emit(is_recording, is_paused)
+
+    def _on_recorder_state_change_safe(self, is_recording, is_paused):
+        """录音状态变更（主线程执行）"""
         self._recording = is_recording
         self._paused = is_paused
         recording_bar = self._home_page.get_recording_bar()
@@ -478,8 +507,7 @@ class MeetScribeApp(QMainWindow):
 
     def get_output_dir(self):
         """获取输出目录"""
-        return self.config.get("transcript_dir", os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "transcripts"))
+        return self.config.get("transcript_dir", os.path.join(get_data_dir(), "transcripts"))
 
     # ══════════════════════════════════════════════════════════
     #  Window Close

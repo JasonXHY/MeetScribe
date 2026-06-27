@@ -17,6 +17,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
+def pytest_addoption(parser):
+    parser.addoption("--run-heavy", action="store_true", default=False,
+                     help="运行 e2e_heavy 测试（真实子进程 + 模型）")
+    parser.addoption("--run-network", action="store_true", default=False,
+                     help="运行 e2e_network 测试（真实 API 调用）")
+
+
 def pytest_configure(config):
     config.addinivalue_line("markers", "gui: 标记需要图形界面环境的测试")
     config.addinivalue_line("markers", "timeout: 设置测试超时时间（秒）")
@@ -76,20 +83,34 @@ def pytest_ignore_collect(collection_path, config):
 def pytest_collection_modifyitems(config, items):
     """对 heavy/network 用例在环境不满足时自动 skip（而非 error/fail）。
 
-    - e2e_heavy: 需 funasr 已安装。
-    - e2e_network: 需环境变量 MEETSCRIBE_TEST_API_KEY。
+    - e2e_heavy: 需 funasr 已安装 + --run-heavy 标志。
+    - e2e_network: 需 MEETSCRIBE_TEST_API_KEY 环境变量 + --run-network 标志。
     """
-    heavy_skip = pytest.mark.skip(reason="需要 funasr + 模型 + 真实音频（装 funasr 后运行）")
-    network_skip = pytest.mark.skip(reason="需要 MEETSCRIBE_TEST_API_KEY 环境变量")
+    heavy_skip = pytest.mark.skip(reason="需要 funasr + 模型（运行: pytest --run-heavy）")
+    network_skip = pytest.mark.skip(reason="需要 API Key（运行: pytest --run-network）")
 
     funasr_ok = _funasr_available()
     api_key_ok = bool(os.environ.get("MEETSCRIBE_TEST_API_KEY"))
+    run_heavy = config.getoption("--run-heavy", default=False)
+    run_network = config.getoption("--run-network", default=False)
 
     for item in items:
-        if "e2e_heavy" in item.keywords and not funasr_ok:
-            item.add_marker(heavy_skip)
-        if "e2e_network" in item.keywords and not api_key_ok:
-            item.add_marker(network_skip)
+        if "e2e_heavy" in item.keywords:
+            if not run_heavy or not funasr_ok:
+                item.add_marker(heavy_skip)
+        if "e2e_network" in item.keywords:
+            if not run_network or not api_key_ok:
+                item.add_marker(network_skip)
+
+
+@pytest.fixture
+def app():
+    """创建 QApplication 实例（模块级共享）"""
+    from PySide6.QtWidgets import QApplication
+    instance = QApplication.instance()
+    if instance is None:
+        instance = QApplication(sys.argv)
+    return instance
 
 
 @pytest.fixture

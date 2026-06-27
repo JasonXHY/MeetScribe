@@ -19,10 +19,6 @@ class TestFileManager:
         os.close(fd)
         return FileManager(data_file=data_path)
 
-    def test_file_manager_import(self):
-        """测试 FileManager 类可以导入"""
-        assert hasattr(FileManager, '__init__')
-
     def test_file_manager_add_file(self):
         """测试添加文件"""
         fm = self._make_fm()
@@ -275,3 +271,15 @@ class TestFileManager:
         finally:
             os.remove(temp_path)
             os.remove(fm._data_file)
+
+    def test_chinese_path_handling(self, tmp_path):
+        """中文路径应正确保存和加载"""
+        fm = FileManager(data_file=str(tmp_path / "files.json"))
+        chinese_dir = tmp_path / "测试录音"
+        chinese_dir.mkdir()
+        wav = chinese_dir / "会议记录.wav"
+        wav.write_bytes(b"RIFF" + b"\x00" * 100)
+        fm.add_file(str(wav))
+        fm2 = FileManager(data_file=str(tmp_path / "files.json"))
+        item = fm2.get_file(str(wav))
+        assert item is not None

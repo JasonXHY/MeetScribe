@@ -714,7 +714,7 @@ class SettingsPage(QWidget):
             if idx >= 0:
                 self._vendor_combo.setCurrentIndex(idx)
         if hasattr(self, '_model_combo'):
-            model = self._config.get("ai_model", "MiMo")
+            model = self._config.get("ai_model", "mimo-v2.5")
             idx = self._model_combo.findText(model)
             if idx >= 0:
                 self._model_combo.setCurrentIndex(idx)
@@ -750,6 +750,22 @@ class SettingsPage(QWidget):
             idx = self._auto_correction_combo.findText(correction)
             if idx >= 0:
                 self._auto_correction_combo.setCurrentIndex(idx)
+
+    def _refresh_api_key_hint(self):
+        """刷新 API Key 状态提示"""
+        if not self._config:
+            return
+        has_user_key = bool(self._config.get("ai_user_api_key", ""))
+        has_default_key = bool(self._config.get("ai_default_api_key", ""))
+        if has_user_key:
+            self._api_key_hint.setText("已配置自定义 Key")
+            self._api_key_hint.setStyleSheet(f"color: {C_SUCCESS}; font-size: 10px; background: transparent; border: none; padding-left: 108px;")
+        elif has_default_key:
+            self._api_key_hint.setText("使用内置 Key（不可查看）")
+            self._api_key_hint.setStyleSheet(f"color: {C_TXT3}; font-size: 10px; background: transparent; border: none; padding-left: 108px;")
+        else:
+            self._api_key_hint.setText("未配置 API Key，AI 功能不可用")
+            self._api_key_hint.setStyleSheet(f"color: {C_ERROR}; font-size: 10px; background: transparent; border: none; padding-left: 108px;")
 
     def _on_save(self):
         """保存设置"""
@@ -794,6 +810,7 @@ class SettingsPage(QWidget):
             self._config.set("enable_notification", self._notification_cb.isChecked())
 
         self._config.save()
+        self._refresh_api_key_hint()
         self._log("设置已保存")
         self.settings_changed.emit()
         QMessageBox.information(self, "成功", "设置已保存")
