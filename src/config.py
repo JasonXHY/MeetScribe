@@ -27,7 +27,7 @@ DEFAULTS = {
     "auto_summary": "转写后自动生成",
     "asr_engine": "SenseVoice",
     "recording_mode": "dual",
-    "use_vb_cable": True,  # v1.0.1: 默认使用 VB-Audio Cable
+    "use_vb_cable": False,  # v1.0.1: 默认使用 VB-Audio Cable
     "window_width": 1000,
     "window_height": 700,
     # v1.0 内测预置 AI 配置

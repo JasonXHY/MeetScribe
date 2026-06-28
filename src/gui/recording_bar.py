@@ -69,7 +69,7 @@ class RecordingBar(QFrame):
         self._rec_dot.setFixedSize(10, 10)
         self._rec_dot.setStyleSheet(f"""
             background-color: {C_TXT3};
-            border-radius: 5px;
+            border-radius: 6px;
             border: none;
         """)
         layout.addWidget(self._rec_dot)
@@ -321,6 +321,24 @@ class RecordingBar(QFrame):
             """)
             self.pause_btn.setEnabled(False)
             self.pause_btn.setText("暂停")
+            self.pause_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    border: 1px solid {C_TXT3};
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                    font-family: {FONT_FAMILY};
+                    font-size: 12px;
+                    color: {C_TXT3};
+                }}
+                QPushButton:hover {{
+                    background-color: #F0F0F0;
+                }}
+                QPushButton:disabled {{
+                    border-color: {C_TXT3};
+                    color: {C_TXT3};
+                }}
+            """)
             self._rec_dot.setStyleSheet(f"""
                 background-color: {C_TXT3};
                 border-radius: 6px;

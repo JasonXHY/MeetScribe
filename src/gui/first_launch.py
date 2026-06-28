@@ -76,11 +76,7 @@ class FirstLaunchDialog(QDialog):
         self._build()
 
     def _check_models_packaged(self):
-        """检查模型是否已打包到安装目录"""
-        if getattr(sys, 'frozen', False):
-            model_dir = os.path.join(os.path.dirname(sys.executable), 'models')
-            return os.path.exists(model_dir)
-        return False
+        return getattr(sys, 'frozen', False)
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -195,6 +191,14 @@ class FirstLaunchDialog(QDialog):
         self._custom_btn.setCursor(Qt.PointingHandCursor)
         self._custom_btn.clicked.connect(self._on_setup_own)
         v.addWidget(self._custom_btn)
+
+        v.addSpacing(12)
+
+        # VB-Cable hint
+        vb_hint = QLabel("💡 如果需要录制线上会议系统音频，建议安装 VB-Audio Cable 虚拟音频设备")
+        vb_hint.setWordWrap(True)
+        vb_hint.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
+        v.addWidget(vb_hint)
 
         v.addStretch()
         return page
@@ -338,6 +342,10 @@ class FirstLaunchDialog(QDialog):
         """自己配置 API Key → 跳转设置页"""
         self.go_to_settings.emit()
         self._finish()
+
+    def _open_vbcable_download(self):
+        import webbrowser
+        webbrowser.open("https://vb-audio.com/Cable/")
 
     # ── Step 2 动作 ──────────────────────────────────────
 

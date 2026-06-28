@@ -124,7 +124,7 @@ class HomePage(QWidget):
 
         # ── Recording Bar ──
         rec_card = QFrame()
-        rec_card.setFixedHeight(56)
+        rec_card.setMinimumHeight(56)
         rec_card.setStyleSheet(f"""
             QFrame {{
                 background-color: {C_CARD};

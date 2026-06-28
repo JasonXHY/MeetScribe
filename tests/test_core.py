@@ -99,7 +99,7 @@ class TestConfig:
         try:
             config = Config(temp_path)
             assert config.get("recording_mode") == "dual"
-            assert config.get("use_vb_cable") is True
+            assert config.get("use_vb_cable") is False
         finally:
             os.remove(temp_path)
 
@@ -221,7 +221,7 @@ class TestConfigEdgeCases:
         partial_file.write_text('{"recording_mode": "mic"}', encoding='utf-8')
         config = Config(str(partial_file))
         assert config.get("recording_mode") == "mic"
-        assert config.get("use_vb_cable") is True
+        assert config.get("use_vb_cable") is False
 
     @pytest.mark.xfail(reason="Config.get() 无类型校验，已知 GAP")
     def test_config_invalid_type(self, tmp_path):

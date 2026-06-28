@@ -28,10 +28,8 @@ logger = logging.getLogger("MeetScribe")
 def _get_model_dir():
     """获取模型目录（frozen 模式下使用打包的模型）"""
     if getattr(sys, 'frozen', False):
-        # 打包模式：模型在 exe 同目录的 models/ 下
-        return os.path.join(os.path.dirname(sys.executable), 'models')
+        return os.path.join(os.environ.get('LOCALAPPDATA', ''), 'MeetScribe', 'models')
     else:
-        # 开发模式：使用缓存目录
         from utils import get_data_dir
         return os.path.join(get_data_dir(), 'models_cache')
 

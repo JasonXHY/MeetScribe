@@ -113,10 +113,10 @@ OUTPUT_FORMATS = {
 }
 
 # ── Model Cache ──────────────────────────────────────────────
-# frozen 模式：模型在 exe 同目录的 models/ 下（由 Inno Setup 安装）
+# frozen 模式：模型缓存在 AppData 目录
 # 开发模式：使用数据目录下的 models_cache/
 if getattr(sys, 'frozen', False):
-    MODEL_CACHE_DIR = os.path.join(os.path.dirname(sys.executable), 'models')
+    MODEL_CACHE_DIR = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'MeetScribe', 'models')
 else:
     MODEL_CACHE_DIR = os.path.join(get_data_dir(), "models_cache")
 
