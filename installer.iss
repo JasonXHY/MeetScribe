@@ -35,7 +35,7 @@ Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescrip
 Source: "dist\侧耳倾听\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; 模型文件（必须保持 models/models/iic/ 结构，代码期望 cache_dir/models/iic/model_name）
 ; 不压缩模型文件（已是压缩数据，再压缩浪费构建时间）
-Source: "models\models\iic\*"; DestDir: "{userappdata}\MeetScribe\models\models\iic"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
+Source: "models\models\iic\*"; DestDir: "{localappdata}\MeetScribe\models\models\iic"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
 
 [Icons]
 Name: "{group}\侧耳倾听"; Filename: "{app}\侧耳倾听.exe"
@@ -54,7 +54,7 @@ var
 begin
   if CurStep = ssPostInstall then
   begin
-    DataDir := ExpandConstant('{userappdata}\MeetScribe');
+    DataDir := ExpandConstant('{localappdata}\MeetScribe');
     if not DirExists(DataDir) then
     begin
       CreateDir(DataDir);
