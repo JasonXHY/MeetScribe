@@ -129,7 +129,7 @@ class MeetScribeApp(QMainWindow):
             os.makedirs(recording_dir, exist_ok=True)
             self.recorder = UnifiedRecorder(
                 save_dir=recording_dir,
-                use_vb_cable=self.config.get("use_vb_cable", False),
+                use_vb_cable=self.config.get("use_vb_cable", True),
             )
             self._recording = False
             self._paused = False

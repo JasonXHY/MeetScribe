@@ -24,6 +24,7 @@ a = Analysis(
         'funasr',
         'openai',
         'pyaudiowpatch',
+        'modelscope',
     ],
     hookspath=[],
     hooksconfig={},

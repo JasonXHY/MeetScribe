@@ -33,10 +33,10 @@ Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescrip
 [Files]
 ; 主程序
 Source: "dist\侧耳倾听\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; 模型文件（从项目根目录的 models 文件夹复制）
-Source: "models\*"; DestDir: "{app}\models"; Flags: ignoreversion recursesubdirs createallsubdirs
-; VB-Cable 安装包
-Source: "drivers\VBCABLE_Driver_Pack45\VBCABLE_Setup_x64.exe"; DestDir: "{tmp}\vbcable"; Flags: deleteafterinstall
+; 模型文件（必须保持 models/models/iic/ 结构，代码期望 cache_dir/models/iic/model_name）
+Source: "models\models\iic\*"; DestDir: "{app}\models\models\iic"; Flags: ignoreversion recursesubdirs createallsubdirs
+; VB-Cable 安装包（需包含 .inf 驱动文件）
+Source: "drivers\VBCABLE_Driver_Pack45\*"; DestDir: "{tmp}\vbcable"; Flags: ignoreversion recursesubdirs createallsubdirs deleteafterinstall
 
 [Icons]
 Name: "{group}\侧耳倾听"; Filename: "{app}\侧耳倾听.exe"
@@ -46,7 +46,7 @@ Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\侧耳倾听"; Fil
 
 [Run]
 ; 安装 VB-Cable（静默模式）
-Filename: "{tmp}\vbcable\VBCABLE_Setup_x64.exe"; Parameters: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"; StatusMsg: "安装虚拟音频设备..."; Flags: waituntilterminated skipifsilent
+Filename: "{tmp}\vbcable\VBCABLE_Setup_x64.exe"; Parameters: "/VERYSILENT /INSTALL /SUPPRESSMSGBOXES /NORESTART"; StatusMsg: "安装虚拟音频设备..."; Flags: waituntilterminated skipifsilent
 ; 安装完成后启动程序
 Filename: "{app}\侧耳倾听.exe"; Parameters: "--data-dir ""{userappdata}\MeetScribe"""; Description: "安装完成后启动侧耳倾听"; Flags: nowait postinstall skipifsilent
 
