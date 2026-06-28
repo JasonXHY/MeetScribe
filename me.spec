@@ -14,6 +14,7 @@ a = Analysis(
     datas=[
         (os.path.join(ROOT, 'assets'), 'assets'),
         (os.path.join(ROOT, 'src', 'config'), 'src/config'),
+        (os.path.join(sys.prefix, 'Lib', 'site-packages', 'funasr'), 'funasr'),
     ],
     hiddenimports=[
         'PySide6.QtWidgets',
@@ -22,6 +23,13 @@ a = Analysis(
         'soundfile',
         'numpy',
         'funasr',
+        'funasr.auto',
+        'funasr.auto.auto_model',
+        'funasr.models',
+        'funasr.models.campplus',
+        'funasr.models.campplus.utils',
+        'funasr.models.e2e',
+        'funasr.utils',
         'openai',
         'pyaudiowpatch',
         'modelscope',
