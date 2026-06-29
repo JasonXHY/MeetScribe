@@ -16,11 +16,11 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QStackedWidget, QWidget
 )
-from PySide6.QtCore import Qt, Signal, QThread
+from PySide6.QtCore import Qt, Signal, QThread, QTimer
 
 from gui.styles import (
     C_BORDER, C_ACCENT, C_BTN_HOVER, C_ERROR,
-    C_TXT1, C_TXT2, C_TXT3, FONT_FAMILY, MODEL_CACHE_DIR
+    C_TXT1, C_TXT2, C_TXT3, FONT_FAMILY, MODEL_CACHE_DIR, APP_VERSION
 )
 
 logger = logging.getLogger("MeetScribe")
@@ -194,14 +194,63 @@ class FirstLaunchDialog(QDialog):
 
         v.addSpacing(12)
 
-        # VB-Cable hint
-        vb_hint = QLabel("💡 如果需要录制线上会议系统音频，建议安装 VB-Audio Cable 虚拟音频设备")
-        vb_hint.setWordWrap(True)
-        vb_hint.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
-        v.addWidget(vb_hint)
+        # VB-Cable hint with detection
+        vb_layout = QHBoxLayout()
+        vb_layout.setSpacing(8)
+
+        self._vb_status_lbl = QLabel("")
+        self._vb_status_lbl.setStyleSheet(f"font-size: 11px; background: transparent; border: none;")
+        vb_layout.addWidget(self._vb_status_lbl)
+
+        self._vb_download_btn = QPushButton("下载 VB-Audio Cable")
+        self._vb_download_btn.setFixedHeight(24)
+        self._vb_download_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {C_ACCENT};
+                border: 1px solid {C_BORDER};
+                border-radius: 4px;
+                font-size: 11px;
+                padding: 0 8px;
+            }}
+            QPushButton:hover {{
+                background-color: #F5F5F5;
+            }}
+        """)
+        self._vb_download_btn.setCursor(Qt.PointingHandCursor)
+        self._vb_download_btn.clicked.connect(self._open_vbcable_download)
+        vb_layout.addWidget(self._vb_download_btn)
+        vb_layout.addStretch()
+
+        v.addLayout(vb_layout)
+
+        # 检测 VB-Cable
+        QTimer.singleShot(100, self._check_vbcable)
 
         v.addStretch()
         return page
+
+    def _check_vbcable(self):
+        """轻量检测 VB-Cable 是否已安装"""
+        try:
+            # 通过 PowerShell 检查音频设备列表
+            import subprocess
+            result = subprocess.run(
+                ["powershell", "-Command", "Get-PnpDevice -Class AudioEndpoint | Select-Object -ExpandProperty FriendlyName"],
+                capture_output=True, text=True, timeout=5,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            )
+            devices = result.stdout.lower()
+            if "cable input" in devices or "vb-audio" in devices:
+                self._vb_status_lbl.setText("✅ 已检测到 VB-Audio Cable")
+                self._vb_status_lbl.setStyleSheet(f"color: #16A34A; font-size: 11px; background: transparent; border: none;")
+                self._vb_download_btn.setVisible(False)
+            else:
+                self._vb_status_lbl.setText("⚠️ 未检测到 VB-Audio Cable（可选，用于录制系统音频）")
+                self._vb_status_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
+        except Exception:
+            self._vb_status_lbl.setText("💡 如果需要录制线上会议系统音频，建议安装 VB-Audio Cable")
+            self._vb_status_lbl.setStyleSheet(f"color: {C_TXT3}; font-size: 11px; background: transparent; border: none;")
 
     # ── Step 2: 模型下载 ─────────────────────────────────
 
@@ -388,6 +437,7 @@ class FirstLaunchDialog(QDialog):
     def _finish(self):
         if self._config:
             self._config.set("first_launch", False)
+            self._config.set("app_version", APP_VERSION)
             self._config.save()
         self.accept()
 

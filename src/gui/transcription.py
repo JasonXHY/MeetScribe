@@ -11,6 +11,7 @@
 import os
 import re
 import json
+import time
 import logging
 import multiprocessing
 import queue
@@ -60,6 +61,8 @@ class TranscriptionHandler(QObject):
         self._current_batch_paths = set()
         self._names_applied = False  # 防重入标记
         self._active_workers = []  # 保持 Worker 引用，防止 GC 回收
+        self._last_heartbeat = 0  # 上次收到心跳的时间戳
+        self._heartbeat_timeout = 120  # 心跳超时秒数
 
     @property
     def is_transcribing(self):
@@ -135,6 +138,7 @@ class TranscriptionHandler(QObject):
         self._file_status = {}
         self._done_called = False  # 重置防重入标记
         self._names_applied = False  # 重置姓名应用防重入标记
+        self._last_heartbeat = time.time()  # 重置心跳时间戳
 
         # 重置说话人相关数据
         self._speaker_embeddings = {}
@@ -197,12 +201,24 @@ class TranscriptionHandler(QObject):
             if not self._done_called:
                 self._on_done()
 
+        # 心跳超时检测：进程存活但长时间无消息
+        elif self._process and self._process.is_alive() and self._last_heartbeat > 0:
+            elapsed = time.time() - self._last_heartbeat
+            if elapsed > self._heartbeat_timeout:
+                logger.error(f"转写超时：子进程 {elapsed:.0f} 秒无响应")
+                self.log_message.emit(f"转写超时：子进程 {elapsed:.0f} 秒无响应")
+                self._transcribing = False
+                self._poll_timer.stop()
+                self._on_done()
+
     def _process_message(self, msg):
         """处理转写消息"""
         msg_type = msg[0]
 
         if msg_type == "status":
             self.status_changed.emit(msg[1])
+        elif msg_type == "heartbeat":
+            self._last_heartbeat = time.time()
         elif msg_type == "log":
             self.log_message.emit(msg[1])
         elif msg_type == "processing":
@@ -973,6 +989,9 @@ class TranscriptionHandler(QObject):
         if not self._transcribing:
             return
 
+        self._transcribing = False  # 立即置 False，防止重入
+        self._poll_timer.stop()
+
         # 终止进程
         if self._process and self._process.is_alive():
             self._process.terminate()
@@ -985,8 +1004,6 @@ class TranscriptionHandler(QObject):
             for fp in self._file_status:
                 self.file_status_changed.emit(fp, FileStatus.PENDING)
 
-        self._transcribing = False
-        self._poll_timer.stop()
         self.log_message.emit("转写已停止")
 
 

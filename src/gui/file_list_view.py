@@ -239,10 +239,11 @@ class FileListView(QWidget):
 
     @staticmethod
     def _display_name(file_info: dict) -> str:
-        """合并组文件（merged=True）名称加 📎 前缀，使双轨/合并文件视觉归组（FILE-006）。"""
+        """合并组文件（merged=True）名称加 [合并] 前缀，使双轨/合并文件视觉归组（FILE-006）。
+        使用纯文本标记而非 emoji，避免不同环境字体渲染差异。"""
         name = file_info.get("name", "")
         if file_info.get("merged"):
-            return f"📎 {name}"
+            return f"[合并] {name}"
         return name
 
     def _apply_incremental(self, files: list):
@@ -338,7 +339,7 @@ class FileListView(QWidget):
             queue_item.setText("")
         self._table.setItem(row, 0, queue_item)
 
-        # 文件名（带蓝色圆点；合并组加 📎 前缀）
+        # 文件名（带蓝色圆点；合并组加 [合并] 前缀）
         name = self._display_name(file_info)
         name_item = QTableWidgetItem(name)
         name_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)

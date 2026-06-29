@@ -230,6 +230,13 @@ class MeetScribeApp(QMainWindow):
             # 刷新文件列表
             self._home_page.refresh_file_list()
 
+            # 版本检测：新版本重置首次启动引导
+            saved_ver = self.config.get("app_version", "")
+            if saved_ver != APP_VERSION:
+                self.config.set("first_launch", True)
+                self.config.set("app_version", APP_VERSION)
+                self.config.save()
+
             # 首次启动引导
             if check_first_launch(self.config):
                 QTimer.singleShot(500, self._show_first_launch)

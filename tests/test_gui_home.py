@@ -314,12 +314,11 @@ class TestButtonStates:
 
     def test_stop_btn_disabled_on_done(self):
         home, mock_app = _make_home_page_full()
-        home._recording_bar.stop_btn.setEnabled = MagicMock()
-        home._recording_bar.stop_btn.setStyleSheet = MagicMock()
+        home._recording_bar.update_state = MagicMock()
 
         home._on_transcription_done_handler(1, 0)
 
-        home._recording_bar.stop_btn.setEnabled.assert_called_with(False)
+        home._recording_bar.update_state.assert_called_with(recording=False, paused=False)
 
 
 # ══════════════════════════════════════════════════════════
@@ -895,13 +894,13 @@ class TestMergedGroupBadge:
         merged["merged"] = True
 
         view.refresh([normal, merged])
-        assert "📎" not in view._table.item(0, 1).text(), "普通行不应带 📎"
-        assert "📎" in view._table.item(1, 1).text(), "合并组行应带 📎"
+        assert "[合并]" not in view._table.item(0, 1).text(), "普通行不应带 [合并]"
+        assert "[合并]" in view._table.item(1, 1).text(), "合并组行应带 [合并]"
 
         normal2 = _make_file("/normal.wav", name="normal.wav")
         normal2["merged"] = True
         view.refresh([normal2, merged])
-        assert "📎" in view._table.item(0, 1).text(), "就地更新为合并组后应带 📎"
+        assert "[合并]" in view._table.item(0, 1).text(), "就地更新为合并组后应带 [合并]"
 
 
 # ══════════════════════════════════════════════════════════

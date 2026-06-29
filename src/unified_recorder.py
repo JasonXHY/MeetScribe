@@ -167,6 +167,7 @@ class UnifiedRecorder:
                     sys_dev = None
             else:
                 logger.warning("VB-Audio Cable enabled but not found, falling back to WASAPI Loopback")
+                logger.warning("[提示] 未检测到 VB-Audio Cable，已自动切换到 WASAPI Loopback 模式。如需录制线上会议系统音频，请安装 VB-Audio Cable。")
 
         # 回退到 WASAPI Loopback
         if sys_dev is None:

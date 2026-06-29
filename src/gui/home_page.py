@@ -567,25 +567,7 @@ class HomePage(QWidget):
         self._btn_transcribe.setEnabled(True)
         self._btn_transcribe.setText("开始转写")
         self._btn_ai_summary.setEnabled(True)
-        self._recording_bar.stop_btn.setEnabled(False)
-        self._recording_bar.stop_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: transparent;
-                border: 1px solid {C_TXT3};
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-family: {FONT_FAMILY};
-                font-size: 12px;
-                color: {C_TXT3};
-            }}
-            QPushButton:hover {{
-                background-color: #F0F0F0;
-            }}
-            QPushButton:disabled {{
-                border-color: {C_TXT3};
-                color: {C_TXT3};
-            }}
-        """)
+        self._recording_bar.update_state(recording=False, paused=False)
         self.refresh_file_list()
         msg = f"转写完成: 成功 {success_count} 个"
         if fail_count > 0:

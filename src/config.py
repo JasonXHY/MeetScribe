@@ -46,6 +46,8 @@ DEFAULTS = {
     "ollama_enabled": "关闭",
     "ollama_url": "http://localhost:11434/v1",
     "ollama_model": "qwen3:1.7b",
+    "first_launch": True,
+    "app_version": "",
 }
 
 

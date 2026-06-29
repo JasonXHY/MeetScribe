@@ -16,13 +16,16 @@ if sys.stdout is None:
 if sys.stderr is None:
     sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
-# 在子进程中配置日志（只写文件，不写控制台）
-# 打包模式使用 AppData 目录，开发模式使用项目目录
-if getattr(sys, 'frozen', False):
-    _data_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'MeetScribe')
-else:
+# 添加 src 到 sys.path（确保 utils 可导入）
+if not getattr(sys, 'frozen', False):
     _src_dir = os.path.dirname(os.path.abspath(__file__))
-    _data_dir = os.path.dirname(_src_dir)
+    if _src_dir not in sys.path:
+        sys.path.insert(0, _src_dir)
+
+from utils import get_data_dir
+
+# 在子进程中配置日志（只写文件，不写控制台）
+_data_dir = get_data_dir()
 _log_dir = os.path.join(_data_dir, "logs")
 os.makedirs(_log_dir, exist_ok=True)
 _log_file = os.path.join(_log_dir, "meetscribe.log")
@@ -120,6 +123,7 @@ def transcribe_worker_process(queue, model_cache_dir, device,
         from transcriber import Transcriber
 
         queue.put(("log", "模型检查通过，开始转写..."))
+        queue.put(("heartbeat", "准备加载模型"))
 
         transcriber = Transcriber(model_cache_dir=model_cache_dir, device=device)
 
@@ -132,6 +136,7 @@ def transcribe_worker_process(queue, model_cache_dir, device,
         def progress_cb(msg):
             queue.put(("status", str(msg)))
             queue.put(("log", str(msg)))
+            queue.put(("heartbeat", str(msg)))
 
         ext_map = {"llm-md": ".md", "md": ".md", "html": ".html",
                    "txt": ".txt", "srt": ".srt", "json": ".json"}
@@ -160,6 +165,7 @@ def transcribe_worker_process(queue, model_cache_dir, device,
             for idx, fp in enumerate(file_paths):
                 fname = os.path.basename(fp)
                 queue.put(("log", f"正在转写: {fname}"))
+                queue.put(("heartbeat", f"转写文件 {idx+1}/{len(file_paths)}"))
                 elapsed = _time.time() - start_time
                 eta_sec = int(elapsed / max(idx, 1) * (len(file_paths) - idx)) if idx > 0 else 0
                 eta_str = f"{eta_sec // 60}分{eta_sec % 60}秒" if eta_sec > 0 else "计算中..."
@@ -204,6 +210,7 @@ def transcribe_worker_process(queue, model_cache_dir, device,
                 fname = os.path.basename(fp)
                 queue.put(("processing", fp))
                 queue.put(("log", f"正在转写: {fname}"))
+                queue.put(("heartbeat", f"转写文件 {idx+1}/{len(file_paths)}"))
 
                 elapsed = _time.time() - start_time
                 eta_sec = int(elapsed / max(idx, 1) * (len(file_paths) - idx)) if idx > 0 else 0
