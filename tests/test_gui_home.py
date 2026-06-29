@@ -332,7 +332,9 @@ class TestStopButton:
 
         home._stop_recording()
 
-        mock_app._transcription_handler.stop_transcription.assert_called_once()
+        # 停止按钮只控制录音，不控制转写
+        mock_app._transcription_handler.stop_transcription.assert_not_called()
+        mock_app.recorder.stop.assert_called_once()
 
     def test_stop_button_during_recording(self):
         home, mock_app = _make_home_page_full()

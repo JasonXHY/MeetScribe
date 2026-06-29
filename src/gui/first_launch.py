@@ -202,7 +202,26 @@ class FirstLaunchDialog(QDialog):
         self._vb_status_lbl.setStyleSheet(f"font-size: 11px; background: transparent; border: none;")
         vb_layout.addWidget(self._vb_status_lbl)
 
-        self._vb_download_btn = QPushButton("下载 VB-Audio Cable")
+        self._vb_install_btn = QPushButton("一键安装")
+        self._vb_install_btn.setFixedHeight(24)
+        self._vb_install_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {C_ACCENT};
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 11px;
+                padding: 0 8px;
+            }}
+            QPushButton:hover {{
+                background-color: {C_BTN_HOVER};
+            }}
+        """)
+        self._vb_install_btn.setCursor(Qt.PointingHandCursor)
+        self._vb_install_btn.clicked.connect(self._install_vbcable)
+        vb_layout.addWidget(self._vb_install_btn)
+
+        self._vb_download_btn = QPushButton("下载页面")
         self._vb_download_btn.setFixedHeight(24)
         self._vb_download_btn.setStyleSheet(f"""
             QPushButton {{
@@ -244,6 +263,7 @@ class FirstLaunchDialog(QDialog):
             if "cable input" in devices or "vb-audio" in devices:
                 self._vb_status_lbl.setText("✅ 已检测到 VB-Audio Cable")
                 self._vb_status_lbl.setStyleSheet(f"color: #16A34A; font-size: 11px; background: transparent; border: none;")
+                self._vb_install_btn.setVisible(False)
                 self._vb_download_btn.setVisible(False)
             else:
                 self._vb_status_lbl.setText("⚠️ 未检测到 VB-Audio Cable（可选，用于录制系统音频）")
@@ -395,6 +415,28 @@ class FirstLaunchDialog(QDialog):
     def _open_vbcable_download(self):
         import webbrowser
         webbrowser.open("https://vb-audio.com/Cable/")
+
+    def _install_vbcable(self):
+        """一键安装 VB-Cable（需要管理员权限）"""
+        import ctypes
+        # 打包模式下查找安装程序
+        exe_path = os.path.join(os.path.dirname(sys.executable), 'drivers', 'VBCABLE_Driver_Pack45', 'VBCABLE_Setup_x64.exe')
+        if not os.path.exists(exe_path):
+            # 开发模式下查找
+            exe_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'drivers', 'VBCABLE_Driver_Pack45', 'VBCABLE_Setup_x64.exe')
+        if os.path.exists(exe_path):
+            # 使用 ShellExecuteW + "runas" 触发 UAC 提权
+            ret = ctypes.windll.shell32.ShellExecuteW(0, "runas", exe_path, "", None, 1)
+            if ret > 32:
+                self._vb_status_lbl.setText("安装程序已启动，请按提示完成安装")
+                self._vb_status_lbl.setStyleSheet(f"color: {C_TXT2}; font-size: 11px; background: transparent; border: none;")
+                self._vb_install_btn.setEnabled(False)
+            else:
+                self._vb_status_lbl.setText("无法启动安装程序（可能需要管理员权限）")
+                self._vb_status_lbl.setStyleSheet(f"color: {C_ERROR}; font-size: 11px; background: transparent; border: none;")
+        else:
+            self._vb_status_lbl.setText("未找到安装程序，请手动下载")
+            self._vb_status_lbl.setStyleSheet(f"color: {C_ERROR}; font-size: 11px; background: transparent; border: none;")
 
     # ── Step 2 动作 ──────────────────────────────────────
 

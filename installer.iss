@@ -36,6 +36,8 @@ Source: "dist\侧耳倾听\*"; DestDir: "{app}"; Flags: ignoreversion recursesub
 ; 模型文件（必须保持 models/models/iic/ 结构，代码期望 cache_dir/models/iic/model_name）
 ; 不压缩模型文件（已是压缩数据，再压缩浪费构建时间）
 Source: "models\models\iic\*"; DestDir: "{localappdata}\MeetScribe\models\models\iic"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
+; VB-Cable 安装包（供用户手动安装）
+Source: "drivers\VBCABLE_Driver_Pack45\*"; DestDir: "{app}\drivers\VBCABLE_Driver_Pack45"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
 
 [Icons]
 Name: "{group}\侧耳倾听"; Filename: "{app}\侧耳倾听.exe"
@@ -51,6 +53,7 @@ Filename: "{app}\侧耳倾听.exe"; Description: "安装完成后启动侧耳倾
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   DataDir: String;
+  VBCableResult: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -61,5 +64,15 @@ begin
     end;
     SaveStringToFile(DataDir + '\install_path.txt', ExpandConstant('{app}'), False);
     SaveStringToFile(DataDir + '\data_dir.txt', DataDir, False);
+
+    // VB-Cable 安装提示
+    VBCableResult := MsgBox('是否安装 VB-Audio Cable？' + #13#10 +
+      'VB-Audio Cable 是虚拟音频设备，用于录制线上会议的系统音频。' + #13#10 +
+      '如果只需要录制麦克风音频，可以跳过。',
+      mbConfirmation, MB_YESNO);
+    if VBCableResult = IDYES then
+    begin
+      Exec(ExpandConstant('{app}\drivers\VBCABLE_Driver_Pack45\VBCABLE_Setup_x64.exe'), '', '', SW_SHOWNORMAL, ewWaitUntilTerminated, VBCableResult);
+    end;
   end;
 end;

@@ -134,6 +134,16 @@ class TranscriptionHandler(QObject):
 
     def _execute_task(self, task):
         """执行转写任务"""
+        # 清理残留子进程
+        if self._process and self._process.is_alive():
+            logger.warning("发现残留子进程，正在清理")
+            try:
+                self._process.terminate()
+                self._process.join(timeout=3)
+            except Exception:
+                pass
+            self._process = None
+
         self._transcribing = True
         self._file_status = {}
         self._done_called = False  # 重置防重入标记
@@ -207,6 +217,12 @@ class TranscriptionHandler(QObject):
             if elapsed > self._heartbeat_timeout:
                 logger.error(f"转写超时：子进程 {elapsed:.0f} 秒无响应")
                 self.log_message.emit(f"转写超时：子进程 {elapsed:.0f} 秒无响应")
+                # 防御性 terminate（_on_done 也会执行，但这里更早）
+                try:
+                    self._process.terminate()
+                    self._process.join(timeout=3)
+                except Exception as e:
+                    logger.warning(f"终止超时子进程失败: {e}")
                 self._transcribing = False
                 self._poll_timer.stop()
                 self._on_done()
@@ -318,6 +334,14 @@ class TranscriptionHandler(QObject):
 
         success_count = sum(1 for s in self._file_status.values() if s == "done")
         fail_count = sum(1 for s in self._file_status.values() if s == "failed")
+
+        # 将未完成的 processing 文件标记为 failed
+        if self._app and hasattr(self._app, 'file_manager'):
+            for fp, status in list(self._file_status.items()):
+                if status == "processing":
+                    self._app.file_manager.update_status(fp, FileStatus.FAILED)
+                    self._file_status[fp] = "failed"
+                    fail_count += 1
 
         # 声纹匹配
         if self._speaker_embeddings:
