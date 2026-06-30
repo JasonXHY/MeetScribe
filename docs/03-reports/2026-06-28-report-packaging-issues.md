@@ -191,3 +191,142 @@ Source: "drivers\VBCABLE_Driver_Pack45\*"; DestDir: "{tmp}\vbcable"; Flags: igno
 | `src/transcriber.py` | 添加 `_get_model_dir()`（之前已改） |
 | `src/gui/first_launch.py` | 模型已打包时跳过 Step 2（之前已改） |
 | `LICENSE_CN.md` | 创建中文许可证（之前已改） |
+
+---
+
+## 五、Qoder 审核意见（2026-06-28）
+
+> 逐条对照源码 + 网络搜索验证。上次审核不够细致导致打包踩坑，这次逐行核实。
+
+### A. 逐条验证修复
+
+#### 问题 1（MODEL_CACHE_DIR）— 修复正确 ✅
+
+`styles.py:118-121` 已正确添加 frozen 分支。所有下游消费者（settings_page、transcription、voiceprint、first_launch）都通过 `from gui.styles import MODEL_CACHE_DIR` 获取路径，修改一处全局生效。
+
+**额外确认**：全代码搜索了 14 处 `get_data_dir()` 调用，除 `models_cache` 外其余都是用户数据路径（config/、data/、recordings/、transcripts/、logs/），在 frozen 模式下正确指向 `%LOCALAPPDATA%\MeetScribe`，无需修改。
+
+#### 问题 2（VB-Cable /INSTALL）— 修复存疑 ⚠️
+
+经网络搜索，**VB-Cable 的 Inno Setup 安装程序不存在 `/INSTALL` 参数**。Inno Setup 的标准命令行参数只有 `/SILENT`、`/VERYSILENT`、`/SUPPRESSMSGBOXES`、`/NORESTART`、`/DIR=`、`/GROUP=`、`/NOICONS` 等。
+
+来源：[Inno Setup - Setup Command Line Parameters](https://jrsoftware.org/ishelp/topic_setupcmdline.htm)
+
+VB-Cable 安装失败的真实原因是**问题 5**（缺少 .inf 驱动文件），不是缺少 `/INSTALL` 参数。加上 `/INSTALL` 不会报错（Inno Setup 会忽略未知参数），但也不会产生任何效果。
+
+**建议**：移除 `/INSTALL`，保留 `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART` 即可。真正解决问题的是问题 5 的修复。
+
+#### 问题 3（fallback 默认值）— 修复正确 ✅
+
+`app.py:132` 已改为 `True`，与 `config.py` 的 DEFAULTS 一致。
+
+#### 问题 4（modelscope hiddenimport）— 修复正确但不完整 ⚠️
+
+`modelscope` 已添加到 hiddenimports，但搜索发现还有 **`markdown` 模块遗漏**：
+
+```python
+# src/gui/dialogs.py:195, 214
+try:
+    import markdown  # ← PyInstaller 无法静态检测
+except ImportError:
+    pass
+```
+
+这是 `try/except ImportError` 包裹的条件导入，PyInstaller 的模块图分析**不会跟踪它**。如果 markdown 模块未打包，预览对话框的 Markdown 渲染会静默失败（降级为纯文本）。
+
+**需要添加到 hiddenimports**：
+
+```python
+hiddenimports=[
+    # ... 现有 ...
+    'markdown',  # gui/dialogs.py 条件导入
+]
+```
+
+此外，以下本地模块仅在函数内部导入，PyInstaller 通常能找到但建议显式列出以防万一：
+
+```python
+'voiceprint',           # 多个 GUI 文件函数内导入
+'dual_track_merge',     # app.py, home_page.py, transcribe_worker.py 函数内导入
+'model_registry',       # settings_page.py 函数内导入
+'gui.first_launch',     # app.py 函数内导入
+'gui.dialogs',          # home_page.py 多处函数内导入
+'gui.home_page',        # app.py 函数内导入
+```
+
+#### 问题 5（VB-Cable 目录）— 修复正确 ✅
+
+`installer.iss` 已改为复制整个 `VBCABLE_Driver_Pack45\*` 目录（含 .inf 驱动文件）。这是 VB-Cable 安装失败的真实原因。
+
+#### 问题 6（模型目录结构）— 修复正确 ✅
+
+代码中 `transcriber.py:138` 的路径解析逻辑：
+```python
+local_path = os.path.join(cache_dir, "models", "iic", model_name)
+```
+
+frozen 模式下 `cache_dir = <exe_dir>/models`，所以完整路径是 `<exe_dir>/models/models/iic/<name>`。`installer.iss` 已正确将模型复制到 `{app}\models\models\iic`，路径匹配。
+
+**注意**：`models/models/` 双层命名容易混淆。虽然功能正确，但建议将来重构时简化为单层。
+
+### B. 报告未提及的新问题
+
+#### 新问题 1：`--data-dir` 参数传入但从未解析
+
+`installer.iss:51` 向 exe 传入了 `--data-dir "{userappdata}\MeetScribe"` 参数：
+
+```ini
+Filename: "{app}\侧耳倾听.exe"; Parameters: "--data-dir ""{userappdata}\MeetScribe"""
+```
+
+但 `main.py` 和 `app.py` 中**没有任何代码解析 `--data-dir` 参数**。`get_data_dir()` 在 frozen 模式下硬编码返回 `%LOCALAPPDATA%\MeetScribe`，恰好与 `{userappdata}\MeetScribe` 相同，所以功能不受影响。
+
+**建议**：要么移除 installer.iss 中的 `--data-dir` 参数（避免误导），要么在 main.py 中添加参数解析。前者更简单。
+
+#### 新问题 2：`SolidCompression=yes` 对 2GB 模型文件的影响
+
+`installer.iss:20` 开启了 `SolidCompression=yes`。Solid 压缩会将所有文件视为一个连续数据流压缩，对大量小文件效果好，但对 2GB 的模型权重文件（本质上是接近随机数据的浮点数组），压缩率极低且**构建时间会非常长**。
+
+根据 [Inno Setup 文档](https://jrsoftware.org/ishelp/topic_setup_compression.htm)，LZMA2 对不可压缩数据"expands about 0.005%"。
+
+**建议**：考虑将 `SolidCompression` 改为 `no`，或者对模型文件单独使用 `nocompression` flag：
+
+```ini
+; 主程序用 solid 压缩
+Source: "dist\侧耳倾听\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; 模型文件不压缩（已经是压缩数据，再压缩浪费时间）
+Source: "models\models\iic\*"; DestDir: "{app}\models\models\iic"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
+```
+
+这样安装包体积几乎不变（模型压不了多少），但构建速度会快很多。
+
+#### 新问题 3：`voiceprint.py` 导入了 `MODEL_CACHE_DIR` 但实际未使用
+
+`voiceprint.py:307` 有 `from gui.styles import MODEL_CACHE_DIR`，但 `extract_embedding_from_file` 方法中 CAM++ 模型通过 `AutoModel(model="cam++")` 加载，使用的是 ModelScope 默认路径解析，**并不使用 `MODEL_CACHE_DIR`**。这是一个无害的未使用导入，但容易让人误以为声纹模块使用了正确的模型路径。
+
+### C. 打包前最终检查清单（更新版）
+
+- [x] `styles.py` 的 `MODEL_CACHE_DIR` frozen 模式返回 `<app>/models`
+- [x] `transcriber.py` 的 `_get_model_dir()` 返回 `<app>/models`
+- [x] `first_launch.py` 的 `_check_models_packaged()` 检查 `<app>/models`
+- [x] `installer.iss` 的 `[Files]` 复制 `models\models\iic\*` 到 `{app}\models\models\iic`
+- [ ] `installer.iss` 的 VB-Cable 安装参数**移除 `/INSTALL`**（不存在此参数）
+- [x] `installer.iss` 的 VB-Cable 复制整个目录（含 .inf 文件）
+- [x] `me.spec` 的 hiddenimports 包含 `modelscope`
+- [ ] `me.spec` 的 hiddenimports **还需添加 `markdown`**
+- [ ] `me.spec` 的 hiddenimports **建议添加本地模块**（voiceprint, dual_track_merge 等）
+- [x] `config.py` 的 `use_vb_cable` 默认值为 `True`
+- [x] `app.py` 的 fallback 默认值为 `True`
+- [x] `settings_page.py` 有 VB-Cable 开关 UI
+- [ ] `installer.iss` **移除 `--data-dir` 参数**或 main.py 添加解析
+- [ ] `installer.iss` **考虑模型文件使用 `nocompression`**
+
+### D. 上次审核反思
+
+上次审核发现了 3 个高严重性问题（VB-Cable `/S` 参数、PyInstaller datas 打包模型、MODELSCOPE_CACHE 未设置），但遗漏了以下关键点：
+
+1. **没有逐文件搜索 `get_data_dir()` 的所有调用点** — 如果搜索了，会发现 `MODEL_CACHE_DIR` 在 frozen 模式下的路径不一致问题。这次补上了。
+2. **没有检查 `installer.iss` 的实际代码** — 如果看了 installer.iss，会发现 `--data-dir` 参数传入但未被解析。
+3. **没有检查 hiddenimports 的完整性** — 只关注了 `modelscope`，遗漏了 `markdown` 和多个本地模块。
+
+这些遗漏的根本原因是审核停留在"方案文档审查"层面，没有深入到实际代码和构建配置逐行核实。以后涉及打包部署的审核，必须同时审查 me.spec、installer.iss 和所有路径相关代码。

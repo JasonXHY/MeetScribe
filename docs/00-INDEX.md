@@ -1,6 +1,6 @@
 # 文档索引
 
-> 最后更新：2026-06-26
+> 最后更新：2026-06-27
 > 用途：AI Agent 文档导航入口
 
 ## 快速查找
@@ -19,6 +19,7 @@
 
 | 日期 | 文件 | 说明 |
 |------|------|------|
+| 2026-06-27 | 03-reports/2026-06-27-review-full-code-audit.md | 全面代码审查（P0×2 + P1×10 + P2×12 + P3×10 + 6 项架构优化） |
 | 2026-06-26 | 02-plans/2026-06-26-plan-test-architecture-revamp.md | 测试架构重构方案（42→15 文件，360 弹窗解决，前端场景测试） |
 | 2026-06-26 | 02-plans/2026-06-26-plan-qoder-handoff.md | 交接文档（含 Qoder 审查意见，打包路径修复方案） |
 | 2026-06-26 | 04-guides/2026-06-26-guide-execution-rules.md | 创建执行准则指南 |
@@ -48,6 +49,7 @@
 - 测试方法：`03-reports/2026-06-14-report-test-methodology.md`
 
 ### Bug 修复
+- 全面代码审查：`03-reports/2026-06-27-review-full-code-audit.md`
 - v1.0 Bug 修复：`02-plans/2026-06-14-plan-v1.0-bugfix.md`
 - 修复记录：`05-issues/`
 

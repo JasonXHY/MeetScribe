@@ -49,6 +49,13 @@ Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\侧耳倾听"; Fil
 ; 安装完成后启动程序
 Filename: "{app}\侧耳倾听.exe"; Description: "安装完成后启动侧耳倾听"; Flags: nowait postinstall skipifsilent
 
+[UninstallDelete]
+; 卸载时清理 AppData 中的配置和数据（不清理 models 和 recordings）
+Type: filesandordirs; Name: "{localappdata}\MeetScribe\config"
+Type: filesandordirs; Name: "{localappdata}\MeetScribe\data"
+Type: files; Name: "{localappdata}\MeetScribe\install_path.txt"
+Type: files; Name: "{localappdata}\MeetScribe\data_dir.txt"
+
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
 var

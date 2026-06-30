@@ -570,6 +570,9 @@ class VoiceprintPage(QWidget):
         """刷新说话人列表"""
         try:
             library = self._get_library()
+            # 强制重新加载文件数据（缓存可能已过期）
+            library._loaded = False
+            library._ensure_loaded()
             speakers = library.get_speakers()
 
             self._speaker_list.clear()
