@@ -13,7 +13,7 @@ import re
 import json
 import time
 import logging
-import multiprocessing
+import threading
 import queue
 from PySide6.QtCore import QObject, QTimer, Signal
 
@@ -43,7 +43,7 @@ class TranscriptionHandler(QObject):
         self._app = app
         self._transcribing = False
         self._queue = None
-        self._process = None
+        self._thread = None
         self._ai_service = None
         self._file_status = {}
         self._progress = TranscriptionProgress()
@@ -134,15 +134,11 @@ class TranscriptionHandler(QObject):
 
     def _execute_task(self, task):
         """执行转写任务"""
-        # 清理残留子进程
-        if self._process and self._process.is_alive():
-            logger.warning("发现残留子进程，正在清理")
-            try:
-                self._process.terminate()
-                self._process.join(timeout=3)
-            except Exception:
-                pass
-            self._process = None
+        # 清理残留线程
+        if self._thread and self._thread.is_alive():
+            logger.warning("发现残留线程，正在清理")
+            self._thread.join(timeout=3)
+            self._thread = None
 
         self._transcribing = True
         self._file_status = {}
@@ -159,13 +155,13 @@ class TranscriptionHandler(QObject):
         if not task.out_dir and self._app and hasattr(self._app, 'config'):
             task.out_dir = self._app.config.get("transcript_dir", "")
 
-        # 启动多进程转写
+        # 启动转写线程
         device = "cpu"
         if self._app and hasattr(self._app, 'config'):
             device_cfg = self._app.config.get("device", "CPU")
             device = "cuda" if "cuda" in device_cfg.lower() else "cpu"
-        self._queue = multiprocessing.Queue()
-        self._process = multiprocessing.Process(
+        self._queue = queue.Queue()
+        self._thread = threading.Thread(
             target=transcribe_worker_process,
             args=(
                 self._queue,
@@ -179,7 +175,7 @@ class TranscriptionHandler(QObject):
             ),
             daemon=True,
         )
-        self._process.start()
+        self._thread.start()
         self.log_message.emit(f"开始转写 {len(task.file_paths)} 个文件...")
 
         # 启动轮询
@@ -205,24 +201,19 @@ class TranscriptionHandler(QObject):
         except Exception as e:
             logger.error(f"Queue poll error: {e}")
 
-        # 检查进程状态
-        if self._process and not self._process.is_alive():
-            self._process.join(timeout=1)
+        # 检查线程状态
+        if self._thread and not self._thread.is_alive():
+            self._thread.join(timeout=1)
             if not self._done_called:
                 self._on_done()
 
-        # 心跳超时检测：进程存活但长时间无消息
-        elif self._process and self._process.is_alive() and self._last_heartbeat > 0:
+        # 心跳超时检测：线程存活但长时间无消息
+        elif self._thread and self._thread.is_alive() and self._last_heartbeat > 0:
             elapsed = time.time() - self._last_heartbeat
             if elapsed > self._heartbeat_timeout:
-                logger.error(f"转写超时：子进程 {elapsed:.0f} 秒无响应")
-                self.log_message.emit(f"转写超时：子进程 {elapsed:.0f} 秒无响应")
-                # 防御性 terminate（_on_done 也会执行，但这里更早）
-                try:
-                    self._process.terminate()
-                    self._process.join(timeout=3)
-                except Exception as e:
-                    logger.warning(f"终止超时子进程失败: {e}")
+                logger.error(f"转写超时：线程 {elapsed:.0f} 秒无响应")
+                self.log_message.emit(f"转写超时：线程 {elapsed:.0f} 秒无响应")
+                # daemon 线程会在主线程退出时自动终止
                 self._transcribing = False
                 self._poll_timer.stop()
                 self._on_done()
@@ -357,15 +348,14 @@ class TranscriptionHandler(QObject):
 
         # 清理资源
         try:
-            if self._process:
-                if self._process.is_alive():
-                    self._process.terminate()
-                self._process.join(timeout=2)
-            self._process = None
+            if self._thread:
+                if self._thread.is_alive():
+                    self._thread.join(timeout=2)
+            self._thread = None
             self._queue = None
         except Exception as e:
-            logger.warning(f"转写进程清理异常: {e}")
-            self._process = None
+            logger.warning(f"转写线程清理异常: {e}")
+            self._thread = None
             self._queue = None
 
         self.transcription_done.emit(success_count, fail_count)
@@ -1016,10 +1006,9 @@ class TranscriptionHandler(QObject):
         self._transcribing = False  # 立即置 False，防止重入
         self._poll_timer.stop()
 
-        # 终止进程
-        if self._process and self._process.is_alive():
-            self._process.terminate()
-            self._process.join(timeout=5)
+        # 等待线程结束（daemon 线程会在主线程退出时自动终止）
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5)
 
         # 更新文件状态
         if file_path:

@@ -376,18 +376,17 @@ class TestOnDoneAndQueue:
         assert blocker.args == [2, 1]
 
     def test_on_done_process_cleanup(self, app):
-        """_on_done 应清理子进程"""
+        """_on_done 应清理转写线程"""
         from unittest.mock import MagicMock
         from gui.transcription import TranscriptionHandler
 
         handler = TranscriptionHandler(app=app)
-        mock_process = MagicMock()
-        mock_process.is_alive.return_value = True
-        handler._process = mock_process
+        mock_thread = MagicMock()
+        mock_thread.is_alive.return_value = True
+        handler._thread = mock_thread
         handler._on_done()
-        mock_process.terminate.assert_called_once()
-        mock_process.join.assert_called_once_with(timeout=2)
-        assert handler._process is None
+        mock_thread.join.assert_called_once_with(timeout=2)
+        assert handler._thread is None
 
     def test_on_done_clears_done_flag(self, app, monkeypatch):
         """新任务应重置 _done_called"""
@@ -1025,7 +1024,7 @@ class TestAsyncPostprocess:
         app = MagicMock()
         handler = TranscriptionHandler(app)
         handler._names_applied = True
-        with patch('multiprocessing.Process'):
+        with patch('threading.Thread'):
             handler._execute_task(MagicMock())
         assert handler._names_applied is False
 
@@ -1043,7 +1042,7 @@ class TestOutputDirectory:
         mock_app = MagicMock()
         mock_app.config.get.return_value = "/custom/output/dir"
         handler._app = mock_app
-        with patch('gui.transcription.multiprocessing.Process'):
+        with patch('gui.transcription.threading.Thread'):
             handler.start(["test.wav"], "llm-md", {}, "")
         assert handler._file_queue is not None
 
@@ -1053,7 +1052,7 @@ class TestOutputDirectory:
         mock_app = MagicMock()
         mock_app.config.get.return_value = ""
         handler._app = mock_app
-        with patch('gui.transcription.multiprocessing.Process'):
+        with patch('gui.transcription.threading.Thread'):
             handler.start(["test.wav"], "llm-md", {}, "")
         assert handler._file_queue is not None
 

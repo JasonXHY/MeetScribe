@@ -392,6 +392,9 @@ class MeetScribeApp(QMainWindow):
         """录音状态变更（主线程执行）"""
         self._recording = is_recording
         self._paused = is_paused
+        # 转写期间不更新录音栏
+        if self._transcription_handler and self._transcription_handler.is_transcribing:
+            return
         recording_bar = self._home_page.get_recording_bar()
         if recording_bar:
             recording_bar.update_state(is_recording, is_paused)

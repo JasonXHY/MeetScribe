@@ -314,11 +314,11 @@ class TestButtonStates:
 
     def test_stop_btn_disabled_on_done(self):
         home, mock_app = _make_home_page_full()
-        home._recording_bar.update_state = MagicMock()
+        home._recording_bar.set_transcribing = MagicMock()
 
         home._on_transcription_done_handler(1, 0)
 
-        home._recording_bar.update_state.assert_called_with(recording=False, paused=False)
+        home._recording_bar.set_transcribing.assert_called_with(False)
 
 
 # ══════════════════════════════════════════════════════════
@@ -499,7 +499,7 @@ class TestF2CurrentBatchPaths:
         handler = TranscriptionHandler(app=None)
         handler._current_batch_paths = set()
 
-        with patch('gui.transcription.multiprocessing.Process'):
+        with patch('gui.transcription.threading.Thread'):
             handler.start(["file1.wav", "file2.wav"], "llm-md", {}, "")
 
         assert "file1.wav" in handler._current_batch_paths
@@ -513,7 +513,7 @@ class TestF2CurrentBatchPaths:
         handler = TranscriptionHandler(app=None)
         handler._current_batch_paths = set()
 
-        with patch('gui.transcription.multiprocessing.Process'):
+        with patch('gui.transcription.threading.Thread'):
             handler.start([], "llm-md", {}, "")
 
         assert handler._current_batch_paths == set()
@@ -524,7 +524,7 @@ class TestF2CurrentBatchPaths:
 
         handler = TranscriptionHandler(app=None)
 
-        with patch('gui.transcription.multiprocessing.Process'):
+        with patch('gui.transcription.threading.Thread'):
             handler.start(["old.wav"], "llm-md", {}, "")
             assert "old.wav" in handler._current_batch_paths
 

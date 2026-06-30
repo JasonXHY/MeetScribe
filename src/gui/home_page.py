@@ -558,7 +558,7 @@ class HomePage(QWidget):
         self._btn_transcribe.setEnabled(True)
         self._btn_transcribe.setText("开始转写")
         self._btn_ai_summary.setEnabled(True)
-        self._recording_bar.update_state(recording=False, paused=False)
+        self._recording_bar.set_transcribing(False)
         self.refresh_file_list()
         msg = f"转写完成: 成功 {success_count} 个"
         if fail_count > 0:
@@ -821,7 +821,7 @@ class HomePage(QWidget):
         """停止转写"""
         if self._app and hasattr(self._app, '_transcription_handler'):
             self._app._transcription_handler.stop_transcription(file_path)
-            self._recording_bar.update_state(recording=False, paused=False)
+            self._recording_bar.set_transcribing(False)
             self.refresh_file_list()
 
     def _queue_move_up(self, file_path):
@@ -846,17 +846,28 @@ class HomePage(QWidget):
             self.refresh_file_list()
 
     def _transcribe_single(self, file_path):
-        """转写单个文件"""
+        """转写单个文件（自动检测双轨配对）"""
         if self._app and hasattr(self._app, '_transcription_handler'):
             handler = self._app._transcription_handler
             if handler.is_transcribing:
                 QMessageBox.information(self, "提示", "正在转写中，请等待完成")
                 return
             fmt = self.get_selected_format()
-            handler.start([file_path], fmt, {}, "")
+
+            from dual_track_merge import find_dual_track_pair
+            pair = find_dual_track_pair(file_path)
+            if pair:
+                mic_path, sys_path = pair
+                files_to_transcribe = [mic_path, sys_path]
+                self._log(f"检测到双轨配对: {os.path.basename(mic_path)} + {os.path.basename(sys_path)}")
+            else:
+                files_to_transcribe = [file_path]
+
+            handler.start(files_to_transcribe, fmt, {}, "")
             self._btn_transcribe.setEnabled(False)
             self._btn_transcribe.setText("转写中...")
-            self._log(f"开始转写: {os.path.basename(file_path)}")
+            self._recording_bar.set_transcribing(True)
+            self._log(f"开始转写: {', '.join(os.path.basename(f) for f in files_to_transcribe)}")
             self.refresh_file_list()
 
     def _retry_transcription(self, file_path):
@@ -904,6 +915,7 @@ class HomePage(QWidget):
                 self._btn_transcribe.setEnabled(False)
                 self._btn_transcribe.setText("转写中...")
                 self._btn_ai_summary.setEnabled(False)
+                self._recording_bar.set_transcribing(True)
                 self._log(f"开始转写 {len(all_paths)} 个文件...")
                 self.refresh_file_list()
 
