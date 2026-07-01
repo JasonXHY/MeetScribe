@@ -43,39 +43,8 @@ class RecordingBar(QFrame):
         self._setup_ui()
 
     def set_transcribing(self, transcribing):
-        """设置转写状态，转写期间禁用所有录音按钮"""
+        """设置转写状态（仅记录标志，不操作按钮——转写期间允许录音）"""
         self._transcribing = transcribing
-        if transcribing:
-            self.record_btn.setEnabled(False)
-            self.stop_btn.setEnabled(False)
-            self.stop_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: transparent;
-                    border: 1px solid {C_TXT3};
-                    border-radius: 6px;
-                    padding: 6px 12px;
-                    font-family: {FONT_FAMILY};
-                    font-size: 12px;
-                    color: {C_TXT3};
-                }}
-            """)
-            self.pause_btn.setEnabled(False)
-            self.pause_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: transparent;
-                    border: 1px solid {C_TXT3};
-                    border-radius: 6px;
-                    padding: 6px 12px;
-                    font-family: {FONT_FAMILY};
-                    font-size: 12px;
-                    color: {C_TXT3};
-                }}
-            """)
-            self.mode_combo.setEnabled(False)
-            self._rec_status_lbl.setText("转写中...")
-        else:
-            self.mode_combo.setEnabled(True)
-            self.update_state(self._recording, self._paused)
 
     def eventFilter(self, obj, event):
         """阻止 ComboBox 滚轮变更值，但允许页面继续滚动"""
