@@ -863,7 +863,7 @@ class HomePage(QWidget):
             else:
                 files_to_transcribe = [file_path]
 
-            handler.start(files_to_transcribe, fmt, {}, "")
+            handler.start(files_to_transcribe, fmt, {}, "", merge=bool(pair))
             self._btn_transcribe.setEnabled(False)
             self._btn_transcribe.setText("转写中...")
             self._recording_bar.set_transcribing(True)
@@ -893,11 +893,13 @@ class HomePage(QWidget):
                 from dual_track_merge import find_dual_track_pair
                 all_paths = []
                 processed = set()
+                has_dual = False
                 for fp in paths:
                     if fp in processed:
                         continue
                     pair = find_dual_track_pair(fp)
                     if pair:
+                        has_dual = True
                         mic_path, sys_path = pair
                         if mic_path not in processed:
                             all_paths.append(mic_path)
@@ -911,7 +913,7 @@ class HomePage(QWidget):
                         processed.add(fp)
 
                 handler.add_to_queue(all_paths)
-                handler.start(all_paths, fmt, {}, "")
+                handler.start(all_paths, fmt, {}, "", merge=has_dual)
                 self._btn_transcribe.setEnabled(False)
                 self._btn_transcribe.setText("转写中...")
                 self._btn_ai_summary.setEnabled(False)
