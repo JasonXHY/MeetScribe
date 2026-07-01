@@ -416,7 +416,8 @@ class SpeakerDialog(QDialog):
 
     def __init__(self, parent, file_name, speakers, on_save=None,
                  speaker_embeddings=None, speaker_qualities=None,
-                 audio_path=None, sentences=None):
+                 audio_path=None, sentences=None, cross_track_pairs=None,
+                 is_dual_track=False):
         super().__init__(parent)
         self.setWindowTitle("发言人管理")
         self.setMinimumSize(820, 560)
@@ -432,6 +433,9 @@ class SpeakerDialog(QDialog):
         self._audio_path = audio_path
         self._sentences = sentences or []
         self._names = {}
+        self._cross_track_pairs = cross_track_pairs or []
+        self._is_dual_track = is_dual_track
+        self._merge_rules = []  # 已确认的合并规则: [(local_label, remote_label, unified_name)]
 
         self._build()
 
@@ -515,6 +519,10 @@ class SpeakerDialog(QDialog):
         scroll_area.setWidget(self._speaker_widget)
         layout.addWidget(scroll_area, 1)
 
+        # 跨轨合并区域（仅双轨模式且有跨轨匹配对时显示）
+        if self._is_dual_track and self._cross_track_pairs:
+            self._build_merge_section(layout)
+
         # 按钮
         btn_layout = QHBoxLayout()
         cancel_btn = QPushButton("取消")
@@ -536,6 +544,274 @@ class SpeakerDialog(QDialog):
         btn_layout.addWidget(save_btn)
 
         layout.addLayout(btn_layout)
+
+    # ══════════════════════════════════════════════════════════
+    #  跨轨合并区域
+    # ══════════════════════════════════════════════════════════
+
+    def _build_merge_section(self, parent_layout):
+        """构建跨轨发言人合并区域"""
+        merge_frame = QFrame()
+        merge_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: #FFFBEB;
+                border: 1px solid #FDE68A;
+                border-radius: 8px;
+            }}
+        """)
+        merge_layout = QVBoxLayout(merge_frame)
+        merge_layout.setContentsMargins(14, 12, 14, 12)
+        merge_layout.setSpacing(6)
+
+        # 标题
+        merge_title = QLabel("跨轨发言人合并")
+        merge_title.setStyleSheet(f"""
+            QLabel {{ color: #92400E; font-family: {FONT_FAMILY};
+                font-size: 12px; font-weight: bold; }}
+        """)
+        merge_layout.addWidget(merge_title)
+
+        merge_hint = QLabel("声纹匹配检测到以下发言人可能是同一人，确认后转写文本中的标签将统一更新")
+        merge_hint.setStyleSheet(f"""
+            QLabel {{ color: #B45309; font-family: {FONT_FAMILY}; font-size: 11px; }}
+        """)
+        merge_layout.addWidget(merge_hint)
+
+        # 已确认的合并规则展示区（可滚动）
+        self._merge_pairs_container = QWidget()
+        self._merge_pairs_container.setStyleSheet("background: transparent;")
+        self._merge_pairs_layout = QVBoxLayout(self._merge_pairs_container)
+        self._merge_pairs_layout.setContentsMargins(0, 4, 0, 0)
+        self._merge_pairs_layout.setSpacing(4)
+
+        # 构建预填合并对
+        self._merge_pair_widgets = []
+        for local_label, remote_label, score in self._cross_track_pairs:
+            self._add_merge_pair_row(local_label, remote_label, score)
+
+        self._merge_pairs_layout.addStretch()
+        merge_layout.addWidget(self._merge_pairs_container)
+
+        # 手动添加合并规则
+        add_row = QHBoxLayout()
+        add_row.setSpacing(8)
+
+        self._merge_local_combo = QComboBox()
+        self._merge_local_combo.setFixedWidth(140)
+        self._merge_local_combo.setStyleSheet(f"""
+            QComboBox {{
+                border: 1px solid #FDE68A; border-radius: 6px;
+                padding: 2px 8px; font-family: {FONT_FAMILY}; font-size: 12px;
+                background-color: #FFF; color: #6B7280;
+            }}
+        """)
+        # 填充本地发言人选项
+        self._merge_local_combo.addItem("选择本地发言人")
+        for s in self._speakers:
+            if s['label'].startswith("本地-"):
+                self._merge_local_combo.addItem(s['label'])
+        add_row.addWidget(self._merge_local_combo)
+
+        arrow_label = QLabel("=")
+        arrow_label.setStyleSheet(f"QLabel {{ color: #D97706; font-size: 14px; font-weight: bold; }}")
+        add_row.addWidget(arrow_label)
+
+        self._merge_remote_combo = QComboBox()
+        self._merge_remote_combo.setFixedWidth(140)
+        self._merge_remote_combo.setStyleSheet(f"""
+            QComboBox {{
+                border: 1px solid #FDE68A; border-radius: 6px;
+                padding: 2px 8px; font-family: {FONT_FAMILY}; font-size: 12px;
+                background-color: #FFF; color: #6B7280;
+            }}
+        """)
+        # 填充远程发言人选项
+        self._merge_remote_combo.addItem("选择远程发言人")
+        for s in self._speakers:
+            if s['label'].startswith("远程-"):
+                self._merge_remote_combo.addItem(s['label'])
+        add_row.addWidget(self._merge_remote_combo)
+
+        add_btn = QPushButton("+ 添加合并规则")
+        add_btn.setStyleSheet(f"""
+            QPushButton {{
+                color: #B45309; background: transparent;
+                border: 1px dashed #FDE68A; border-radius: 6px;
+                font-family: {FONT_FAMILY}; font-size: 11px;
+                padding: 4px 10px;
+            }}
+            QPushButton:hover {{ background: #FEF3C7; }}
+        """)
+        add_btn.clicked.connect(self._add_manual_merge_rule)
+        add_row.addWidget(add_btn)
+
+        merge_layout.addLayout(add_row)
+        parent_layout.addWidget(merge_frame)
+
+    def _add_merge_pair_row(self, local_label, remote_label, score, unified_name=""):
+        """添加一个合并对行到合并区域"""
+        row = QHBoxLayout()
+        row.setSpacing(8)
+
+        # 圆点
+        dot = QLabel()
+        dot.setFixedSize(8, 8)
+        dot.setStyleSheet("background-color: #F59E0B; border-radius: 4px;")
+        row.addWidget(dot)
+
+        # 本地 chip
+        local_chip = QLabel(local_label)
+        local_chip.setStyleSheet(f"""
+            QLabel {{
+                background-color: #EFF6FF; border: 1px solid #BFDBFE;
+                border-radius: 6px; padding: 4px 10px;
+                font-family: {FONT_FAMILY}; font-size: 12px; color: #111827;
+            }}
+        """)
+        row.addWidget(local_chip)
+
+        # =
+        eq_label = QLabel("=")
+        eq_label.setStyleSheet(f"QLabel {{ color: #D97706; font-size: 14px; font-weight: bold; }}")
+        row.addWidget(eq_label)
+
+        # 远程 chip
+        remote_chip = QLabel(remote_label)
+        remote_chip.setStyleSheet(f"""
+            QLabel {{
+                background-color: #EEF2FF; border: 1px solid #C7D2FE;
+                border-radius: 6px; padding: 4px 10px;
+                font-family: {FONT_FAMILY}; font-size: 12px; color: #111827;
+            }}
+        """)
+        row.addWidget(remote_chip)
+
+        # 百分比
+        score_label = QLabel(f"{score:.0%}")
+        score_label.setStyleSheet(f"""
+            QLabel {{ color: #B45309; font-family: {FONT_FAMILY};
+                font-size: 11px; font-weight: 500; }}
+        """)
+        row.addWidget(score_label)
+
+        # →
+        arrow = QLabel("→")
+        arrow.setStyleSheet(f"QLabel {{ color: #D97706; font-size: 14px; font-weight: bold; }}")
+        row.addWidget(arrow)
+
+        # 统一姓名输入框
+        name_input = QLineEdit()
+        name_input.setFixedWidth(120)
+        name_input.setPlaceholderText("统一姓名")
+        if unified_name:
+            name_input.setText(unified_name)
+        else:
+            # 预填：查找本地发言人是否已有姓名
+            for s in self._speakers:
+                if s['label'] == local_label and s.get('name'):
+                    name_input.setText(s['name'])
+                    break
+        name_input.setStyleSheet(f"""
+            QLineEdit {{
+                border: 1px solid #FDE68A; border-radius: 6px;
+                padding: 4px 8px; font-family: {FONT_FAMILY}; font-size: 12px;
+                background-color: #FFF;
+            }}
+            QLineEdit:focus {{ border-color: #F59E0B; }}
+        """)
+        row.addWidget(name_input)
+
+        # 确认按钮
+        confirm_btn = QPushButton("确认")
+        confirm_btn.setFixedSize(60, 28)
+        confirm_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #F59E0B; color: white;
+                border: none; border-radius: 6px;
+                font-family: {FONT_FAMILY}; font-size: 11px;
+            }}
+            QPushButton:hover {{ background-color: #D97706; }}
+            QPushButton:disabled {{ background-color: #D1D5DB; }}
+        """)
+        confirm_btn.clicked.connect(lambda checked, l=local_label, r=remote_label, inp=name_input:
+                                    self._confirm_merge(l, r, inp))
+        row.addWidget(confirm_btn)
+
+        container = QWidget()
+        container.setLayout(row)
+        self._merge_pairs_layout.insertWidget(self._merge_pairs_layout.count() - 1, container)
+
+        self._merge_pair_widgets.append({
+            'local': local_label,
+            'remote': remote_label,
+            'name_input': name_input,
+            'confirm_btn': confirm_btn,
+            'widget': container,
+        })
+
+    def _confirm_merge(self, local_label, remote_label, name_input):
+        """确认合并一对发言人"""
+        unified_name = name_input.text().strip()
+        if not unified_name:
+            QMessageBox.information(self, "提示", "请输入统一姓名")
+            return
+
+        # 检查是否已有该合并规则
+        for rule in self._merge_rules:
+            if rule[0] == local_label and rule[1] == remote_label:
+                # 更新已有规则
+                rule[2] = unified_name
+                break
+        else:
+            self._merge_rules.append((local_label, remote_label, unified_name))
+
+        # 预览：更新发言人列表中的姓名
+        for i, s in enumerate(self._speakers):
+            if s['label'] in (local_label, remote_label):
+                s['name'] = unified_name
+                if i in self._speaker_entries:
+                    self._speaker_entries[i].setText(unified_name)
+
+        # 禁用确认按钮，标记为已确认
+        sender = self.sender()
+        if sender:
+            sender.setEnabled(False)
+            sender.setText("已确认")
+
+        logger.info(f"[MERGE] 合并规则: {local_label} + {remote_label} → {unified_name}")
+
+    def _add_manual_merge_rule(self):
+        """手动添加合并规则"""
+        local_label = self._merge_local_combo.currentText()
+        remote_label = self._merge_remote_combo.currentText()
+
+        if local_label == "选择本地发言人" or remote_label == "选择远程发言人":
+            QMessageBox.information(self, "提示", "请选择本地和远程发言人")
+            return
+
+        # 检查是否已有该对
+        for pair in self._cross_track_pairs:
+            if pair[0] == local_label and pair[1] == remote_label:
+                QMessageBox.information(self, "提示", "该合并对已存在")
+                return
+
+        # 检查是否已确认
+        for rule in self._merge_rules:
+            if rule[0] == local_label and rule[1] == remote_label:
+                QMessageBox.information(self, "提示", "该合并规则已确认")
+                return
+
+        # 添加到预设对列表
+        self._cross_track_pairs.append((local_label, remote_label, 0.0))
+
+        # 插入新行到 add_row 之前（即 stretch 之前）
+        self._add_merge_pair_row(local_label, remote_label, 0.0)
+
+        # 重置下拉框
+        self._merge_local_combo.setCurrentIndex(0)
+        self._merge_remote_combo.setCurrentIndex(0)
+
+        logger.info(f"[MERGE] 手动添加合并对: {local_label} = {remote_label}")
 
     def _refresh_speaker_list(self):
         while self._speaker_layout.count():
@@ -878,11 +1154,19 @@ class SpeakerDialog(QDialog):
                 else:
                     self._names[str(spk_id + 1)] = name
 
+        # 应用所有已确认的合并规则（远程标签 → 统一姓名）
+        for local_label, remote_label, unified_name in self._merge_rules:
+            if unified_name:
+                self._names[remote_label] = unified_name
+                # 如果本地发言人尚未命名，也用统一姓名
+                if local_label not in self._names or not self._names[local_label]:
+                    self._names[local_label] = unified_name
+
         # 自动保存到音色库
         self._auto_save_voiceprints()
 
         if self._on_save:
-            self._on_save(self._names)
+            self._on_save(self._names, self._merge_rules if self._merge_rules else None)
         self.accept()
 
     def _auto_save_voiceprints(self):

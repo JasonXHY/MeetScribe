@@ -696,12 +696,16 @@ class HomePage(QWidget):
                     # 获取说话人嵌入向量
                     speaker_embeddings = {}
                     speaker_qualities = {}
+                    cross_track_pairs = []
+                    is_dual_track = False
                     try:
                         handler = self._app._transcription_handler
                         if hasattr(handler, '_speaker_embeddings'):
                             speaker_embeddings = dict(handler._speaker_embeddings)
                         if hasattr(handler, '_speaker_qualities'):
                             speaker_qualities = dict(handler._speaker_qualities)
+                        if hasattr(handler, '_cross_track_pairs'):
+                            cross_track_pairs = list(handler._cross_track_pairs)
                     except Exception:
                         pass
 
@@ -710,13 +714,24 @@ class HomePage(QWidget):
                         speaker_embeddings, speaker_qualities = self._load_embeddings_from_disk(
                             item.result_path)
 
-                    def on_save(names):
+                    # 检测是否为双轨模式（说话人标签包含 "本地-" 或 "远程-"）
+                    is_dual_track = any(
+                        s.get('label', '').startswith(('本地-', '远程-'))
+                        for s in speakers
+                    )
+
+                    def on_save(names, merge_rules=None):
                         self._app.file_manager.update_speaker_names(file_path, names)
                         if names and item.result_path and os.path.exists(item.result_path):
                             apply_speaker_mapping(item.result_path, names)
                             summary_path = get_summary_path(item.result_path)
                             if summary_path and os.path.exists(summary_path):
                                 apply_speaker_mapping(summary_path, names)
+
+                            # 保存合并规则到 _metadata.json
+                            if merge_rules:
+                                self._save_merge_rules(item.result_path, merge_rules)
+
                             self._log(f"发言人映射已保存: {', '.join(f'{k}→{v}' for k, v in names.items())}")
 
                     dialog = SpeakerDialog(
@@ -724,13 +739,43 @@ class HomePage(QWidget):
                         on_save=on_save,
                         speaker_embeddings=speaker_embeddings,
                         speaker_qualities=speaker_qualities,
-                        audio_path=file_path
+                        audio_path=file_path,
+                        cross_track_pairs=cross_track_pairs,
+                        is_dual_track=is_dual_track,
                     )
                     dialog.exec()
                 else:
                     QMessageBox.information(self, "提示", "未识别到说话人信息")
             else:
                 QMessageBox.information(self, "提示", "请先完成转写")
+
+    def _save_merge_rules(self, result_path, merge_rules):
+        """保存跨轨合并规则到 _metadata.json"""
+        import json
+        try:
+            result_dir = os.path.dirname(result_path)
+            base = os.path.splitext(os.path.basename(result_path))[0]
+            if base.endswith("_transcript"):
+                base = base[:-len("_transcript")]
+            meta_path = os.path.join(result_dir, f"{base}_metadata.json")
+
+            # 读取已有元数据
+            meta = {}
+            if os.path.exists(meta_path):
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+
+            # 写入合并规则
+            meta["cross_track_merge_rules"] = [
+                {"local": l, "remote": r, "unified_name": n}
+                for l, r, n in merge_rules
+            ]
+
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(meta, f, ensure_ascii=False, indent=2)
+            self._log(f"合并规则已保存: {meta_path}")
+        except Exception as e:
+            logger.warning(f"保存合并规则失败: {e}")
 
     def _load_embeddings_from_disk(self, result_path):
         """从磁盘加载声纹嵌入向量"""

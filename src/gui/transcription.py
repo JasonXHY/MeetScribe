@@ -63,6 +63,7 @@ class TranscriptionHandler(QObject):
         self._active_workers = []  # 保持 Worker 引用，防止 GC 回收
         self._last_heartbeat = 0  # 上次收到心跳的时间戳
         self._heartbeat_timeout = 120  # 心跳超时秒数
+        self._cross_track_pairs = []  # 跨轨匹配对: [(local_label, remote_label, score)]
 
     @property
     def is_transcribing(self):
@@ -150,6 +151,7 @@ class TranscriptionHandler(QObject):
         self._speaker_embeddings = {}
         self._speaker_qualities = {}
         self._sentences = []
+        self._cross_track_pairs = []
 
         # 从配置读取输出目录（如果未指定）
         if not task.out_dir and self._app and hasattr(self._app, 'config'):
@@ -643,6 +645,12 @@ class TranscriptionHandler(QObject):
             if not matched_pairs:
                 logger.info("[CROSS-TRACK] No cross-track matches found")
                 return
+
+            # 存储跨轨匹配对（供 SpeakerDialog 合并 UI 使用）
+            self._cross_track_pairs = [
+                (f"本地-{lp.split('-', 1)[1]}", f"远程-{rp.split('-', 1)[1]}", sc)
+                for lp, rp, sc in matched_pairs
+            ]
 
             # 应用跨轨匹配：将远程轨标签替换为对应的本地轨标签的姓名
             for local_key, remote_key, score in matched_pairs:
