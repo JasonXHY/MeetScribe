@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>侧耳倾听 - 发言人管理弹窗 Mockup v2</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; background: #F8F9FA; color: #111827; }
+  .app-window { width: 960px; margin: 32px auto; background: #FFF; border-radius: 12px; box-shadow: 0 8px 40px rgba(0,0,0,0.12); overflow: hidden; }
+  .dialog-titlebar { padding: 20px 24px 0; display: flex; align-items: flex-start; justify-content: space-between; }
+  .dialog-title { font-size: 16px; font-weight: 700; color: #111827; }
+  .dialog-subtitle { font-size: 11px; color: #9CA3AF; margin-top: 4px; }
+  .close-btn { width: 28px; height: 28px; border-radius: 6px; border: none; background: transparent; color: #9CA3AF; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .close-btn:hover { background: #F3F4F6; color: #111827; }
+  .dialog-body { padding: 16px 24px 20px; }
+  .info-bar { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; }
+  .info-bar .file-icon { width: 32px; height: 32px; border-radius: 6px; background: #EFF6FF; display: flex; align-items: center; justify-content: center; color: #3B82F6; font-size: 14px; flex-shrink: 0; }
+  .info-bar .file-info { flex: 1; }
+  .info-bar .file-name { font-size: 13px; font-weight: 600; color: #111827; }
+  .info-bar .file-meta { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
+  .info-bar .dual-badge { background: #EFF6FF; color: #3B82F6; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .section-title { font-size: 13px; font-weight: 600; color: #111827; }
+  .section-hint { font-size: 11px; color: #9CA3AF; }
+  .batch-bar { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .batch-bar label { font-size: 12px; color: #6B7280; white-space: nowrap; }
+  .batch-bar select, .batch-bar input { height: 28px; border: 1px solid #E5E7EB; border-radius: 6px; padding: 0 8px; font-size: 12px; font-family: inherit; background: #FFF; }
+  .batch-bar select { width: 140px; }
+  .batch-bar input { width: 120px; }
+  .batch-bar .batch-btn { height: 28px; padding: 0 12px; background: #3B82F6; color: #FFF; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .batch-bar .batch-btn:hover { background: #2563EB; }
+  .speaker-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .speaker-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #FFF; border: 1px solid #E5E7EB; border-radius: 8px; transition: all 0.1s; flex-wrap: wrap; }
+  .speaker-row:hover { border-color: #D1D5DB; background: #FAFAFA; }
+  .spk-color { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .spk-label { font-size: 12px; color: #6B7280; min-width: 72px; font-weight: 500; }
+  .spk-input { flex: 1; min-width: 120px; height: 30px; border: 1px solid #E5E7EB; border-radius: 6px; padding: 0 10px; font-size: 12px; font-family: inherit; }
+  .spk-input:focus { border-color: #3B82F6; outline: none; box-shadow: 0 0 0 2px rgba(59,130,246,0.1); }
+  .spk-input::placeholder { color: #D1D5DB; }
+  .spk-suggestion { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #3B82F6; font-weight: 500; white-space: nowrap; }
+  .spk-accept-btn { height: 26px; padding: 0 10px; background: #3B82F6; color: #FFF; border: none; border-radius: 6px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+  .spk-accept-btn:hover { background: #2563EB; }
+  .spk-voiceprint-select { height: 28px; border: 1px solid #E5E7EB; border-radius: 6px; padding: 0 8px; font-size: 11px; font-family: inherit; background: #FFF; color: #6B7280; min-width: 110px; }
+  .match-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .match-confirmed { background: #ECFDF5; color: #059669; }
+  .match-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .match-confirmed .match-dot { background: #059669; }
+  .spk-pct { font-size: 11px; color: #9CA3AF; min-width: 42px; text-align: right; }
+  .spk-btn { height: 28px; padding: 0 10px; border-radius: 6px; font-size: 11px; border: none; cursor: pointer; white-space: nowrap; transition: all 0.1s; }
+  .spk-btn-save { background: #3B82F6; color: #FFF; }
+  .spk-btn-save:hover { background: #2563EB; }
+  .merge-section { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+  .merge-section .merge-title { font-size: 12px; font-weight: 600; color: #92400E; margin-bottom: 4px; }
+  .merge-section .merge-hint { font-size: 11px; color: #B45309; margin-bottom: 12px; }
+  .merge-pair { display: flex; align-items: center; gap: 8px; padding: 6px 0; flex-wrap: wrap; }
+  .merge-pair .pair-dot { width: 8px; height: 8px; border-radius: 50%; background: #F59E0B; flex-shrink: 0; }
+  .merge-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 12px; background: #FFF; border: 1px solid #E5E7EB; }
+  .merge-chip .chip-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .merge-chip.local { border-color: #BFDBFE; background: #EFF6FF; }
+  .merge-chip.remote { border-color: #C7D2FE; background: #EEF2FF; }
+  .merge-chip.merged { border-color: #86EFAC; background: #F0FDF4; }
+  .merge-arrow { color: #D97706; font-size: 14px; font-weight: 600; display: flex; align-items: center; }
+  .merge-score { font-size: 11px; color: #B45309; font-weight: 500; }
+  .merge-name-input { height: 28px; width: 100px; border: 1px solid #FDE68A; border-radius: 6px; padding: 0 8px; font-size: 12px; font-family: inherit; background: #FFF; }
+  .merge-name-input::placeholder { color: #D1D5DB; }
+  .merge-apply-btn { height: 28px; padding: 0 12px; background: #F59E0B; color: #FFF; border: none; border-radius: 6px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+  .merge-apply-btn:hover { background: #D97706; }
+  .merge-add-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; flex-wrap: wrap; }
+  .merge-add-select { height: 28px; border: 1px solid #FDE68A; border-radius: 6px; padding: 0 8px; font-size: 12px; font-family: inherit; background: #FFF; color: #6B7280; }
+  .merge-add-btn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 11px; color: #B45309; background: transparent; border: 1px dashed #FDE68A; cursor: pointer; margin-top: 4px; }
+  .merge-add-btn:hover { background: #FEF3C7; }
+  .dialog-footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 16px; border-top: 1px solid #F3F4F6; }
+  .footer-btn { height: 32px; padding: 0 20px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.1s; }
+  .footer-cancel { background: transparent; color: #6B7280; border: 1px solid #E5E7EB; }
+  .footer-cancel:hover { background: #F3F4F6; }
+  .footer-save { background: #3B82F6; color: #FFF; }
+  .footer-save:hover { background: #2563EB; }
+  .scene-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .scene-tab { padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; border: 1px solid #E5E7EB; background: #FFF; color: #6B7280; transition: all 0.1s; }
+  .scene-tab:hover { background: #F3F4F6; }
+  .scene-tab.active { background: #EFF6FF; color: #3B82F6; border-color: #BFDBFE; font-weight: 500; }
+  .annotation { position: relative; margin: 24px auto; max-width: 960px; padding: 12px 16px; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; font-size: 12px; color: #991B1B; line-height: 1.6; }
+  .annotation strong { color: #7F1D1D; }
+  .annotation .ann-title { font-weight: 700; margin-bottom: 4px; }
+  .conflict-tag { font-size: 10px; color: #EF4444; background: #FEF2F2; padding: 1px 6px; border-radius: 4px; margin-left: 4px; }
+</style>
+</head>
+<body>
+
+<div class="annotation">
+  <div class="ann-title">v2 更新说明</div>
+  <strong>相比 v1 的变化：</strong><br>
+  1. 发言人列表保留"声纹建议 + 接受按钮"和"从音色库选择"下拉框（现有逻辑）<br>
+  2. 跨轨合并区域改为<strong>智能预填</strong>：跨轨声纹匹配到的对自动出现，带置信度百分比<br>
+  3. 预填逻辑：一方有姓名则预填，双方都有但不同则标注"姓名冲突"<br>
+  4. 用户仍可手动添加合并规则<br>
+  <strong>匹配流程：</strong>第一轮音色库匹配 → 第二轮跨轨嵌入向量匹配 → 结果传入弹窗
+</div>
+
+<div class="app-window">
+  <div class="dialog-titlebar">
+    <div>
+      <div class="dialog-title">发言人管理</div>
+      <div class="dialog-subtitle">识别并命名转写中的发言人，可保存到音色库供后续自动匹配</div>
+    </div>
+    <button class="close-btn">x</button>
+  </div>
+  <div class="dialog-body">
+
+    <div class="info-bar">
+      <div class="file-icon">M</div>
+      <div class="file-info">
+        <div class="file-name">070115会议.wav、070115会议_系统音频.wav</div>
+        <div class="file-meta">双轨合并转写 | 识别出 4 位说话人 | 时长 32:15</div>
+      </div>
+      <span class="dual-badge">双轨</span>
+    </div>
+
+    <div class="scene-tabs">
+      <div class="scene-tab active">场景 1: 双轨合并</div>
+      <div class="scene-tab">场景 2: 单轨转写</div>
+    </div>
+
+    <div class="section-header">
+      <span class="section-title">发言人列表</span>
+      <span class="section-hint">点击姓名可编辑，回车确认</span>
+    </div>
+
+    <div class="batch-bar">
+      <label>批量替换</label>
+      <select><option>本地-0</option><option>本地-1</option><option>远程-0</option><option>远程-1</option></select>
+      <label>替换为</label>
+      <input type="text" placeholder="输入新名称">
+      <button class="batch-btn">替换</button>
+    </div>
+
+    <div class="speaker-list">
+
+      <!-- 本地-0：音色库 confirmed + 跨轨匹配到远程-0 -->
+      <div class="speaker-row">
+        <div class="spk-color" style="background:#3B82F6"></div>
+        <span class="spk-label">本地-0</span>
+        <input class="spk-input" type="text" value="张三" placeholder="输入真实姓名">
+        <span class="match-badge match-confirmed"><span class="match-dot"></span>声纹确认</span>
+        <select class="spk-voiceprint-select"><option>(从音色库选择)</option><option>张三</option><option>李四</option><option>王五</option></select>
+        <span class="spk-pct">38.2%</span>
+        <button class="spk-btn spk-btn-save">保存到音色库</button>
+      </div>
+
+      <!-- 远程-0：音色库 suggested + 跨轨匹配到本地-0 -->
+      <div class="speaker-row">
+        <div class="spk-color" style="background:#8B5CF6"></div>
+        <span class="spk-label">远程-0</span>
+        <input class="spk-input" type="text" value="" placeholder="输入真实姓名">
+        <span class="spk-suggestion">可能是 李四 (37%)</span>
+        <button class="spk-accept-btn">接受</button>
+        <select class="spk-voiceprint-select"><option>(从音色库选择)</option><option>张三</option><option>李四</option><option>王五</option></select>
+        <span class="spk-pct">31.5%</span>
+        <button class="spk-btn spk-btn-save">保存到音色库</button>
+      </div>
+
+      <!-- 本地-1：无音色库匹配 + 跨轨匹配到远程-1 -->
+      <div class="speaker-row">
+        <div class="spk-color" style="background:#10B981"></div>
+        <span class="spk-label">本地-1</span>
+        <input class="spk-input" type="text" value="" placeholder="输入真实姓名">
+        <select class="spk-voiceprint-select"><option>(从音色库选择)</option><option>张三</option><option>李四</option><option>王五</option></select>
+        <span class="spk-pct">18.7%</span>
+        <button class="spk-btn spk-btn-save">保存到音色库</button>
+      </div>
+
+      <!-- 远程-1：无音色库匹配 + 跨轨匹配到本地-1 -->
+      <div class="speaker-row">
+        <div class="spk-color" style="background:#F59E0B"></div>
+        <span class="spk-label">远程-1</span>
+        <input class="spk-input" type="text" value="" placeholder="输入真实姓名">
+        <select class="spk-voiceprint-select"><option>(从音色库选择)</option><option>张三</option><option>李四</option><option>王五</option></select>
+        <span class="spk-pct">11.6%</span>
+        <button class="spk-btn spk-btn-save">保存到音色库</button>
+      </div>
+
+    </div>
+
+    <!-- 跨轨合并区域：智能预填 -->
+    <div class="merge-section">
+      <div class="merge-title">跨轨发言人合并</div>
+      <div class="merge-hint">声纹匹配检测到以下发言人可能是同一人，确认后转写文本中的标签将统一更新</div>
+
+      <!-- 预填对 1：本地-0 已有姓名"张三"，预填 -->
+      <div class="merge-pair">
+        <span class="pair-dot"></span>
+        <span class="merge-chip local"><span class="chip-dot" style="background:#3B82F6"></span>本地-0 (张三)</span>
+        <span class="merge-arrow">=</span>
+        <span class="merge-chip remote"><span class="chip-dot" style="background:#8B5CF6"></span>远程-0</span>
+        <span class="merge-score">87%</span>
+        <span class="merge-arrow">&rarr;</span>
+        <input class="merge-name-input" type="text" value="张三" placeholder="统一姓名">
+        <button class="merge-apply-btn">确认</button>
+      </div>
+
+      <!-- 预填对 2：双方都无姓名，需要用户填写 -->
+      <div class="merge-pair">
+        <span class="pair-dot"></span>
+        <span class="merge-chip local"><span class="chip-dot" style="background:#10B981"></span>本地-1</span>
+        <span class="merge-arrow">=</span>
+        <span class="merge-chip remote"><span class="chip-dot" style="background:#F59E0B"></span>远程-1</span>
+        <span class="merge-score">82%</span>
+        <span class="merge-arrow">&rarr;</span>
+        <input class="merge-name-input" type="text" placeholder="统一姓名">
+        <button class="merge-apply-btn">确认</button>
+      </div>
+
+      <!-- 手动添加 -->
+      <div class="merge-add-row">
+        <select class="merge-add-select"><option>选择本地发言人</option><option>本地-0</option><option>本地-1</option></select>
+        <span class="merge-arrow">=</span>
+        <select class="merge-add-select"><option>选择远程发言人</option><option>远程-0</option><option>远程-1</option></select>
+        <button class="merge-add-btn">+ 添加合并规则</button>
+      </div>
+    </div>
+
+    <div class="dialog-footer">
+      <button class="footer-btn footer-cancel">取消</button>
+      <button class="footer-btn footer-save">保存</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- 场景 2: 单轨转写 -->
+<!-- ════════════════════════════════════════════════════════════ -->
+
+<div class="annotation">
+  <div class="ann-title">场景 2 说明（单轨模式）</div>
+  单轨模式下<strong>不显示</strong>跨轨合并区域。发言人标签为 Speaker 1 / Speaker 2 格式。<br>
+  声纹建议、接受按钮、从音色库选择、保存到音色库等交互与双轨模式完全一致。
+</div>
+
+<div class="app-window">
+  <div class="dialog-titlebar">
+    <div>
+      <div class="dialog-title">发言人管理</div>
+      <div class="dialog-subtitle">识别并命名转写中的发言人，可保存到音色库供后续自动匹配</div>
+    </div>
+    <button class="close-btn">x</button>
+  </div>
+  <div class="dialog-body">
+    <div class="info-bar">
+      <div class="file-icon">M</div>
+      <div class="file-info">
+        <div class="file-name">070110会议.wav</div>
+        <div class="file-meta">单轨转写 | 识别出 3 位说话人 | 时长 15:42</div>
+      </div>
+    </div>
+    <div class="scene-tabs">
+      <div class="scene-tab">场景 1: 双轨合并</div>
+      <div class="scene-tab active">场景 2: 单轨转写</div>
+    </div>
+    <div class="section-header">
+      <span class="section-title">发言人列表</span>
+      <span class="section-hint">点击姓名可编辑，回车确认</span>
+    </div>
+    <div class="batch-bar">
+      <label>批量替换</label>
+      <select><option>Speaker 1</option><option>Speaker 2</option><option>Speaker 3</option></select>
+      <label>替换为</label>
+      <input type="text" placeholder="输入新名称">
+      <button class="batch-btn">替换</button>
+    </div>
+    <div class="speaker-list">
+      <div class="speaker-row">
+        <div class="spk-color" style="background:#3B82F6"></div>
+        <span class="spk-label">Speaker 1</span>
+        <input class="spk-input" type="text" value="丁弋轩" placeholder="输入真实姓名">
+        <span class="match-badge match-confirmed"><span class="match-dot"></span>声纹确认</span>
+        <select class="spk-voiceprint-select"><option>(从音色库选择)</option><option>丁弋轩</option><option>张三</option></select>
+        <span class="spk-pct">52.3%</span>
+        <button class="spk-btn spk-btn-save">保存到音色库</button>
+      </div>
+      <div class="speaker-row">
+        <div class="spk-color" style="background:#F59E0B"></div>
+        <span class="spk-label">Speaker 2</span>
+        <input class="spk-input" type="text" value="" placeholder="输入真实姓名">
+        <span class="spk-suggestion">可能是 丁弋轩 (37%)</span>
+        <button class="spk-accept-btn">接受</button>
+        <select class="spk-voiceprint-select"><option>(从音色库选择)</option><option>丁弋轩</option><option>张三</option></select>
+        <span class="spk-pct">30.1%</span>
+        <button class="spk-btn spk-btn-save">保存到音色库</button>
+      </div>
+      <div class="speaker-row">
+        <div class="spk-color" style="background:#10B981"></div>
+        <span class="spk-label">Speaker 3</span>
+        <input class="spk-input" type="text" value="" placeholder="输入真实姓名">
+        <select class="spk-voiceprint-select"><option>(从音色库选择)</option><option>丁弋轩</option><option>张三</option></select>
+        <span class="spk-pct">17.6%</span>
+        <button class="spk-btn spk-btn-save">保存到音色库</button>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button class="footer-btn footer-cancel">取消</button>
+      <button class="footer-btn footer-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="annotation">
+  <div class="ann-title">交互说明（v2）</div>
+  <strong>1. 声纹建议 + 接受：</strong>音色库匹配到但非 confirmed 时，显示"可能是 XXX (37%)" + "接受"按钮。点击"接受"自动填入姓名输入框，建议标签和按钮隐藏。（<strong>现有逻辑保留</strong>）<br>
+  <strong>2. 从音色库选择：</strong>下拉框列出音色库所有成员，选择后自动填入姓名输入框。（<strong>现有逻辑保留</strong>）<br>
+  <strong>3. 保存到音色库：</strong>将发言人嵌入向量保存到音色库。双轨模式下使用按轨分组的嵌入向量（P1 修复后），保存时标注来源轨。<br>
+  <strong>4. 跨轨合并智能预填：</strong>跨轨声纹匹配到的对自动出现在合并区。一方有姓名则预填为统一姓名；双方都有但不同则标注"姓名冲突"并预填 confirmed 的那个。<br>
+  <strong>5. 跨轨匹配置信度：</strong>显示百分比（如 87%），阈值 0.65（低于音色库的 0.75，因跨轨音频质量差异大）。<br>
+  <strong>6. 手动添加：</strong>用户可从下拉框选择本地和远程发言人，手动添加合并规则。<br>
+  <strong>7. 确认合并：</strong>点击"确认"后立即应用合并规则，更新转写文本中双方标签为统一姓名。<br>
+  <strong>8. 保存按钮：</strong>一次性保存所有修改（姓名 + 合并规则），写入转写元数据并更新文本。
+</div>
+
+<div class="annotation">
+  <div class="ann-title">技术可行性分析</div>
+  <strong>跨轨声纹匹配：</strong>CAM++ 输出 192 维嵌入向量，余弦相似度计算已在现有 `_match_voiceprints()` 中实现。跨轨匹配只是比较两个 embedding dict，无需额外模型或依赖。<br>
+  <strong>阈值选择：</strong>跨轨音频质量差异大（麦克风近距离 vs 系统音频经过编码），建议阈值 0.65。可通过实验调整，也可做成配置项。<br>
+  <strong>音色库未匹配不影响：</strong>跨轨匹配是 embedding 之间的直接比较，完全不依赖音色库。即使两个人都不在音色库里，只要声纹相似就能识别。<br>
+  <strong>嵌入向量来源：</strong>P1 修复后，嵌入向量按轨分组存储（`{"mic": {0: emb, ...}, "sys": {0: emb, ...}}`），跨轨匹配直接取两组数据比较。<br>
+  <strong>冲突处理：</strong>贪心算法——对每个本地说话人找最相似的远程说话人，已匹配的远程说话人不再参与后续匹配（`used_sys` 集合），避免一对多冲突。
+</div>
+
+</body>
+</html>
