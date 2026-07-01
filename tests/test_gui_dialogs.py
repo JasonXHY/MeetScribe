@@ -281,10 +281,10 @@ class TestEmbeddingSave:
         app = MagicMock()
         handler = TranscriptionHandler(app)
         handler._speaker_embeddings = {
-            0: np.array([0.1, 0.2, 0.3]),
-            1: np.array([0.4, 0.5, 0.6])
+            "mic": {0: np.array([0.1, 0.2, 0.3])},
+            "sys": {0: np.array([0.4, 0.5, 0.6])},
         }
-        handler._speaker_qualities = {0: 0.85, 1: 0.9}
+        handler._speaker_qualities = {"mic": {0: 0.85}, "sys": {0: 0.9}}
         handler._current_batch_paths = {"test.wav"}
 
         mock_item = MagicMock()
@@ -297,12 +297,12 @@ class TestEmbeddingSave:
         assert os.path.exists(emb_path)
         with open(emb_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        assert "0" in data
-        assert "1" in data
-        assert data["0"]["vector"] == [0.1, 0.2, 0.3]
-        assert data["0"]["quality"] == 0.85
-        assert data["1"]["vector"] == [0.4, 0.5, 0.6]
-        assert data["1"]["quality"] == 0.9
+        assert "mic-0" in data
+        assert "sys-0" in data
+        assert data["mic-0"]["vector"] == [0.1, 0.2, 0.3]
+        assert data["mic-0"]["quality"] == 0.85
+        assert data["sys-0"]["vector"] == [0.4, 0.5, 0.6]
+        assert data["sys-0"]["quality"] == 0.9
 
     def test_save_embeddings_no_save_when_empty(self, tmp_path):
         from gui.transcription import TranscriptionHandler
@@ -324,7 +324,7 @@ class TestEmbeddingSave:
         from gui.transcription import TranscriptionHandler
         app = MagicMock()
         handler = TranscriptionHandler(app)
-        handler._speaker_embeddings = {0: np.array([0.1, 0.2])}
+        handler._speaker_embeddings = {"mic": {0: np.array([0.1, 0.2])}}
         handler._current_batch_paths = {"test.wav"}
 
         mock_item = MagicMock()
@@ -339,8 +339,8 @@ class TestEmbeddingSave:
         from gui.transcription import TranscriptionHandler
         app = MagicMock()
         handler = TranscriptionHandler(app)
-        handler._speaker_embeddings = {0: np.array([1.0, 2.0, 3.0])}
-        handler._speaker_qualities = {0: 0.95}
+        handler._speaker_embeddings = {"mic": {0: np.array([1.0, 2.0, 3.0])}}
+        handler._speaker_qualities = {"mic": {0: 0.95}}
         handler._current_batch_paths = {"test.wav"}
 
         mock_item = MagicMock()
@@ -352,14 +352,14 @@ class TestEmbeddingSave:
         emb_path = str(tmp_path / "test_embeddings.json")
         with open(emb_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        assert isinstance(data["0"]["vector"], list)
-        assert data["0"]["vector"] == [1.0, 2.0, 3.0]
+        assert isinstance(data["mic-0"]["vector"], list)
+        assert data["mic-0"]["vector"] == [1.0, 2.0, 3.0]
 
     def test_save_embeddings_called_in_on_done(self):
         from gui.transcription import TranscriptionHandler
         app = MagicMock()
         handler = TranscriptionHandler(app)
-        handler._speaker_embeddings = {0: np.array([0.1, 0.2])}
+        handler._speaker_embeddings = {"mic": {0: np.array([0.1, 0.2])}}
         handler._current_batch_paths = {"test.wav"}
         handler._transcribing = True
         handler._file_status = {"test.wav": "done"}
@@ -372,7 +372,7 @@ class TestEmbeddingSave:
         from gui.transcription import TranscriptionHandler
         app = MagicMock()
         handler = TranscriptionHandler(app)
-        handler._speaker_embeddings = {0: np.array([0.1, 0.2])}
+        handler._speaker_embeddings = {"mic": {0: np.array([0.1, 0.2])}}
         handler._speaker_qualities = {}
         handler._current_batch_paths = {"test.wav"}
 
@@ -386,7 +386,7 @@ class TestEmbeddingSave:
         with open(emb_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         from gui.styles import DEFAULT_SPK_QUALITY
-        assert data["0"]["quality"] == DEFAULT_SPK_QUALITY
+        assert data["mic-0"]["quality"] == DEFAULT_SPK_QUALITY
 
 
 # ═══════════════════════════════════════════════════════════════

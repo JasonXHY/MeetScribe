@@ -43,17 +43,29 @@ def get_summary_path(transcript_path):
 
 
 def apply_speaker_mapping(transcript_path, mapping):
-    """将 Speaker N 或 本地-N/远程-N 替换为真实姓名"""
+    """将 Speaker N 或 本地-N/远程-N 替换为真实姓名
+
+    mapping key 支持三种格式：
+      - int: 匹配 Speaker N（1-based），如 {1: "张三"}
+      - str "本地-N" / "远程-N": 精确替换（0-based），如 {"本地-0": "张三"}
+      - str 纯数字: 匹配 Speaker N（1-based），如 {"1": "张三"}
+    """
     try:
         with open(transcript_path, "r", encoding="utf-8") as f:
             content = f.read()
 
         for spk_id, name in mapping.items():
-            if '-' in str(spk_id) and not str(spk_id).isdigit():
-                content = content.replace(str(spk_id), name)
+            key_str = str(spk_id)
+            if key_str.startswith("本地-") or key_str.startswith("远程-"):
+                # 精确替换本地-N/远程-N 标签
+                content = content.replace(key_str, name)
+            elif '-' in key_str and not key_str.isdigit():
+                # 其他带连字符的字符串 key，精确替换
+                content = content.replace(key_str, name)
             else:
+                # int 或纯数字字符串：匹配 Speaker N（1-based）
                 content = re.sub(
-                    rf'(?<!\w)Speaker\s+{spk_id}(?!\w)',
+                    rf'(?<!\w)Speaker\s+{key_str}(?!\w)',
                     name, content)
 
         with open(transcript_path, "w", encoding="utf-8") as f:

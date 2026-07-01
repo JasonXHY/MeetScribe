@@ -290,6 +290,8 @@ class TranscriptionHandler(QObject):
             # 先执行声纹匹配（如果尚未执行且有嵌入数据）
             if not self._voiceprint_matched and self._speaker_embeddings:
                 self._match_voiceprints()
+                # 跨轨匹配：检测本地轨和远程轨中是否为同一人
+                self._match_cross_track_speakers()
 
             # 执行姓名应用（无论有无声纹，正则提取都需要跑）
             self._apply_speaker_names()
@@ -344,6 +346,8 @@ class TranscriptionHandler(QObject):
         # 声纹匹配
         if self._speaker_embeddings:
             self._match_voiceprints()
+            # 跨轨匹配：检测本地轨和远程轨中是否为同一人
+            self._match_cross_track_speakers()
         else:
             logger.warning("[VOICEPRINT] No speaker embeddings received, skipping match")
 
@@ -455,7 +459,7 @@ class TranscriptionHandler(QObject):
                 # 详细日志：打印与每个音色库成员的匹配分数
                 import numpy as np
                 emb_array = np.array(embedding) if not isinstance(embedding, np.ndarray) else embedding
-                logger.info(f"[VOICEPRINT] Speaker {speaker_id + 1}: embedding dim={emb_array.shape}")
+                logger.info(f"[VOICEPRINT] Speaker {speaker_id}: embedding dim={emb_array.shape}")
                 for spk_name, profile in library.get_speakers().items():
                     avg_emb = profile.get_weighted_embedding()
                     if avg_emb is not None:
@@ -467,10 +471,10 @@ class TranscriptionHandler(QObject):
                 if name:
                     confidence = "confirmed" if score >= HIGH_CONFIDENCE else "suggested"
                     all_matches.append((speaker_id, name, confidence, score, embedding))
-                    logger.info(f"[VOICEPRINT] Speaker {speaker_id + 1}: match={name}, "
+                    logger.info(f"[VOICEPRINT] Speaker {speaker_id}: match={name}, "
                                f"score={score:.3f}, confidence={confidence}")
                 else:
-                    logger.info(f"[VOICEPRINT] Speaker {speaker_id + 1}: no match (best score below threshold)")
+                    logger.info(f"[VOICEPRINT] Speaker {speaker_id}: no match (best score below threshold)")
 
             if not all_matches:
                 logger.warning("[VOICEPRINT] No matches found for any speaker")
@@ -490,7 +494,7 @@ class TranscriptionHandler(QObject):
             written_ids = {v[0] for v in best_by_name.values()}
             for speaker_id, name, confidence, score, embedding in all_matches:
                 if speaker_id not in written_ids:
-                    logger.info(f"[VOICEPRINT] Skipped conflict: Speaker {speaker_id+1} -> {name} "
+                    logger.info(f"[VOICEPRINT] Skipped conflict: Speaker {speaker_id} -> {name} "
                               f"(score={score:.3f}, lower than best match)")
 
         except Exception as e:
@@ -499,11 +503,30 @@ class TranscriptionHandler(QObject):
     def _apply_voiceprint_match(self, name, speaker_id, confidence, embedding, library):
         """将单个说话人的匹配结果写入文件，并记录到 _voiceprint_match_results。
 
+        speaker_id 格式：
+          - "mic-N" / "sys-N"：双轨合并后展开的 key
+          - int：传统扁平格式（1-based Speaker 编号）
+
         匹配记录会先行写入 self._voiceprint_match_results（供摘要注入 AI-006 使用），
         即使后续写文件或自动追加声纹样本失败，匹配结果仍然保留。
         """
         logger.debug(f"[VOICEPRINT] Applying match: speaker_id={speaker_id}, name={name}, confidence={confidence}")
         logger.debug(f"[VOICEPRINT] Current batch paths: {self._current_batch_paths}")
+
+        # 判断是否为双轨 key，构建标签和 mapping key
+        is_dual_key = isinstance(speaker_id, str) and (
+            speaker_id.startswith("mic-") or speaker_id.startswith("sys-")
+        )
+        if is_dual_key:
+            # mic-N → 本地-N, sys-N → 远程-N
+            track, spk_num = speaker_id.split("-", 1)
+            label_prefix = "本地" if track == "mic" else "远程"
+            dual_label = f"{label_prefix}-{spk_num}"
+            mapping_key = dual_label
+            display_label = dual_label
+        else:
+            mapping_key = speaker_id + 1  # 1-based for Speaker N
+            display_label = f"Speaker {speaker_id + 1}"
 
         # 记录匹配结果（供摘要注入与姓名提取优先级判断使用）
         self._voiceprint_match_results[speaker_id] = {
@@ -519,26 +542,35 @@ class TranscriptionHandler(QObject):
                             continue
                         logger.debug(f"[VOICEPRINT] Item status: {item.status}, result_path: {item.result_path}")
                         logger.debug(f"[VOICEPRINT] File path in batch: {item.file_path in self._current_batch_paths}")
+
+                        # 更新 speaker_names：双轨用 "本地-N"/"远程-N"，传统用 int(1-based)
                         str_mapping = item.speaker_names or {}
-                        str_key = str(speaker_id + 1)
-                        str_mapping[str_key] = name
+                        if is_dual_key:
+                            str_mapping[dual_label] = name
+                        else:
+                            str_mapping[str(speaker_id + 1)] = name
                         self._app.file_manager.update_speaker_names(
                             item.file_path, str_mapping
                         )
                         logger.debug(f"[VOICEPRINT] Updated speaker_names: {str_mapping}")
+
                         if os.path.exists(item.result_path):
-                            apply_speaker_mapping(item.result_path, {speaker_id + 1: name})
+                            apply_speaker_mapping(item.result_path, {mapping_key: name})
                             summary_path = get_summary_path(item.result_path)
                             if summary_path and os.path.exists(summary_path):
-                                apply_speaker_mapping(summary_path, {speaker_id + 1: name})
+                                apply_speaker_mapping(summary_path, {mapping_key: name})
 
                         self.log_message.emit(
-                            f"音色库匹配: Speaker {speaker_id + 1} -> {name} ({confidence})"
+                            f"音色库匹配: {display_label} -> {name} ({confidence})"
                         )
 
                         # confirmed 级别自动追加声纹样本
                         if confidence == "confirmed":
-                            quality = self._speaker_qualities.get(speaker_id, DEFAULT_SPK_QUALITY)
+                            if is_dual_key:
+                                track, spk_num = speaker_id.split("-", 1)
+                                quality = self._speaker_qualities.get(track, {}).get(int(spk_num), DEFAULT_SPK_QUALITY)
+                            else:
+                                quality = self._speaker_qualities.get(speaker_id, DEFAULT_SPK_QUALITY)
                             source_name = getattr(item, 'file_name', 'auto_match')
                             library.add_speaker(name, embedding,
                                 source=source_name, quality=quality)
@@ -564,6 +596,100 @@ class TranscriptionHandler(QObject):
                 embeddings[int(key)] = value
         return embeddings
 
+    def _match_cross_track_speakers(self):
+        """跨轨声纹匹配：检测本地轨和远程轨中是否为同一人
+
+        遍历 mic-* 和 sys-* 说话人对，计算余弦相似度。
+        若 >= HIGH_CONFIDENCE (0.50)，视为同一人，合并标签。
+        """
+        if not self._speaker_embeddings:
+            return
+
+        try:
+            import numpy as np
+            from voiceprint import HIGH_CONFIDENCE
+
+            embeddings = self._extract_speaker_embeddings()
+            if not embeddings:
+                return
+
+            # 分离本地轨和远程轨的说话人
+            local_speakers = {}  # {spk_id: embedding}
+            remote_speakers = {}
+            for key, emb in embeddings.items():
+                if not isinstance(key, str):
+                    continue
+                if key.startswith("mic-"):
+                    local_speakers[key] = emb
+                elif key.startswith("sys-"):
+                    remote_speakers[key] = emb
+
+            if not local_speakers or not remote_speakers:
+                return
+
+            # 计算所有 mic-sys 对的相似度
+            matched_pairs = []
+            for local_key, local_emb in local_speakers.items():
+                local_array = np.array(local_emb) if not isinstance(local_emb, np.ndarray) else local_emb
+                for remote_key, remote_emb in remote_speakers.items():
+                    remote_array = np.array(remote_emb) if not isinstance(remote_emb, np.ndarray) else remote_emb
+                    cos_sim = float(np.dot(local_array, remote_array) / (
+                        np.linalg.norm(local_array) * np.linalg.norm(remote_array)
+                    ))
+                    logger.info(f"[CROSS-TRACK] {local_key} vs {remote_key}: cos_sim={cos_sim:.4f}")
+                    if cos_sim >= HIGH_CONFIDENCE:
+                        matched_pairs.append((local_key, remote_key, cos_sim))
+
+            if not matched_pairs:
+                logger.info("[CROSS-TRACK] No cross-track matches found")
+                return
+
+            # 应用跨轨匹配：将远程轨标签替换为对应的本地轨标签的姓名
+            for local_key, remote_key, score in matched_pairs:
+                # local_key = "mic-0" → "本地-0", remote_key = "sys-0" → "远程-0"
+                local_num = local_key.split("-", 1)[1]
+                remote_num = remote_key.split("-", 1)[1]
+                local_label = f"本地-{local_num}"
+                remote_label = f"远程-{remote_num}"
+
+                # 如果本地轨已有匹配结果，将同一姓名应用到远程轨
+                local_match = self._voiceprint_match_results.get(local_key)
+                if local_match and local_match.get("name"):
+                    name = local_match["name"]
+                    confidence = local_match.get("confidence", "suggested")
+                    self._voiceprint_match_results[remote_key] = {
+                        "name": name,
+                        "confidence": confidence,
+                    }
+                    logger.info(f"[CROSS-TRACK] {remote_label} -> {name} "
+                               f"(matched with {local_label}, score={score:.3f})")
+
+                    # 写入文件
+                    if self._app and hasattr(self._app, 'file_manager'):
+                        for item in self._app.file_manager.files:
+                            if item.status == FileStatus.DONE and item.result_path:
+                                if item.file_path not in self._current_batch_paths:
+                                    continue
+                                str_mapping = item.speaker_names or {}
+                                str_mapping[remote_label] = name
+                                self._app.file_manager.update_speaker_names(
+                                    item.file_path, str_mapping
+                                )
+                                if os.path.exists(item.result_path):
+                                    apply_speaker_mapping(item.result_path, {remote_label: name})
+                                    summary_path = get_summary_path(item.result_path)
+                                    if summary_path and os.path.exists(summary_path):
+                                        apply_speaker_mapping(summary_path, {remote_label: name})
+
+                                self.log_message.emit(
+                                    f"跨轨匹配: {remote_label} -> {name} "
+                                    f"(与 {local_label} 为同一人, score={score:.3f})"
+                                )
+                                break
+
+        except Exception as e:
+            logger.error(f"Cross-track speaker matching failed: {e}")
+
     # ══════════════════════════════════════════════════════════
     #  Speaker Name Extraction (AI-003)
     # ══════════════════════════════════════════════════════════
@@ -571,7 +697,7 @@ class TranscriptionHandler(QObject):
     def _apply_speaker_names(self):
         """从转写文本提取发言人真实姓名并应用到结果（AI-003）。
 
-        优先级：声纹高置信（confirmed）匹配 > 姓名提取（正则优先 + LLM 兜底）> 保留 Speaker N。
+        优先级：声纹高置信（confirmed）匹配 > 姓名提取（正则优先 + LLM 兜底）> 保留 Speaker N / 本地-N / 远程-N。
         即：已被声纹 confirmed 命名的说话人不会被本步骤覆盖。
         正则优先；正则无果且配置了可用 AI 服务时才走 LLM 兜底。
         懒加载导入 SpeakerNamer，使本模块在无 funasr 环境下仍可导入。
@@ -589,12 +715,19 @@ class TranscriptionHandler(QObject):
             from speaker_namer import SpeakerNamer
             namer = SpeakerNamer()
 
-            # 已被声纹 confirmed 命名的说话人（0 基 id → 转写文本中的 1 基 Speaker 编号）
-            confirmed_ids = {
-                int(spk_id) + 1
-                for spk_id, info in (self._voiceprint_match_results or {}).items()
-                if isinstance(info, dict) and info.get("confidence") == "confirmed"
-            }
+            # 已被声纹 confirmed 命名的说话人
+            # 支持两种 key 格式：int（传统 1-based）和 "mic-N"/"sys-N"（双轨展开）
+            confirmed_labels = set()
+            for spk_id, info in (self._voiceprint_match_results or {}).items():
+                if isinstance(info, dict) and info.get("confidence") == "confirmed":
+                    if isinstance(spk_id, str) and (spk_id.startswith("mic-") or spk_id.startswith("sys-")):
+                        # 双轨 key: mic-N → 本地-N, sys-N → 远程-N
+                        track, num = spk_id.split("-", 1)
+                        prefix = "本地" if track == "mic" else "远程"
+                        confirmed_labels.add(f"{prefix}-{num}")
+                    else:
+                        # 传统 int key: 1-based Speaker N
+                        confirmed_labels.add(str(int(spk_id) + 1))
 
             for item in self._app.file_manager.files:
                 if item.status != FileStatus.DONE or not item.result_path:
@@ -612,11 +745,25 @@ class TranscriptionHandler(QObject):
                     logger.warning(f"读取转写文件失败，跳过姓名提取: {e}")
                     continue
 
-                # 收集转写中出现的 Speaker 编号（1 基），排除已被声纹 confirmed 命名的
-                speaker_ids = sorted({
-                    int(n) for n in re.findall(r'(?<!\w)Speaker\s+(\d+)(?!\w)', transcript)
-                })
-                target_ids = [str(n) for n in speaker_ids if n not in confirmed_ids]
+                # 收集转写中出现的发言人标签，排除已被声纹 confirmed 命名的
+                # 同时匹配 Speaker N（1-based）和 本地-N / 远程-N（0-based）
+                target_ids = []
+                seen = set()
+
+                # 匹配 本地-N / 远程-N（双轨合并后的格式）
+                for m in re.finditer(r'(本地|远程)-(\d+)', transcript):
+                    label = m.group(0)
+                    if label not in confirmed_labels and label not in seen:
+                        target_ids.append(label)
+                        seen.add(label)
+
+                # 匹配 Speaker N（传统格式，1-based）
+                for m in re.finditer(r'(?<!\w)Speaker\s+(\d+)(?!\w)', transcript):
+                    num_str = m.group(1)
+                    if num_str not in confirmed_labels and num_str not in seen:
+                        target_ids.append(num_str)
+                        seen.add(num_str)
+
                 if not target_ids:
                     continue
 
@@ -628,30 +775,29 @@ class TranscriptionHandler(QObject):
                 if not name_map:
                     continue
 
-                # 转为 {int(1 基编号): 姓名}，再次过滤 confirmed 说话人
-                int_mapping = {
-                    int(sid): name
-                    for sid, name in name_map.items()
-                    if name and int(sid) not in confirmed_ids
+                # 转为 {label: 姓名}，再次过滤 confirmed 说话人
+                filtered_map = {
+                    label: name
+                    for label, name in name_map.items()
+                    if name and label not in confirmed_labels
                 }
-                if not int_mapping:
+                if not filtered_map:
                     continue
 
                 # 应用到转写结果与摘要文件
-                apply_speaker_mapping(item.result_path, int_mapping)
+                apply_speaker_mapping(item.result_path, filtered_map)
                 summary_path = get_summary_path(item.result_path)
                 if summary_path and os.path.exists(summary_path):
-                    apply_speaker_mapping(summary_path, int_mapping)
+                    apply_speaker_mapping(summary_path, filtered_map)
 
                 # 合并写入说话人映射（保留已有的声纹命名）
                 str_mapping = item.speaker_names or {}
-                for sid, name in int_mapping.items():
-                    str_mapping[str(sid)] = name
+                str_mapping.update(filtered_map)
                 self._app.file_manager.update_speaker_names(item.file_path, str_mapping)
 
                 self.log_message.emit(
                     "姓名提取: "
-                    + ", ".join(f"Speaker {k}→{v}" for k, v in int_mapping.items())
+                    + ", ".join(f"{k}->{v}" for k, v in filtered_map.items())
                 )
         except Exception as e:
             logger.error(f"发言人姓名提取失败: {e}", exc_info=True)
@@ -765,14 +911,19 @@ class TranscriptionHandler(QObject):
                 speaker_mapping = self._extract_speaker_mapping_from_summary(summary)
                 if speaker_mapping and self._app and hasattr(self._app, 'file_manager'):
                     # 过滤已被声纹 confirmed 匹配的说话人（不覆盖）
-                    confirmed_ids = {
-                        int(spk_id) + 1
-                        for spk_id, info in (self._voiceprint_match_results or {}).items()
-                        if isinstance(info, dict) and info.get("confidence") == "confirmed"
-                    }
+                    # 支持 int（1-based Speaker N）和 str（本地-N/远程-N）两种 key 格式
+                    confirmed_keys = set()
+                    for spk_id, info in (self._voiceprint_match_results or {}).items():
+                        if isinstance(info, dict) and info.get("confidence") == "confirmed":
+                            if isinstance(spk_id, str) and (spk_id.startswith("mic-") or spk_id.startswith("sys-")):
+                                track, num = spk_id.split("-", 1)
+                                prefix = "本地" if track == "mic" else "远程"
+                                confirmed_keys.add(f"{prefix}-{num}")
+                            else:
+                                confirmed_keys.add(int(spk_id) + 1)
                     filtered_mapping = {
                         k: v for k, v in speaker_mapping.items()
-                        if k not in confirmed_ids
+                        if k not in confirmed_keys
                     }
 
                     if filtered_mapping:
@@ -784,7 +935,7 @@ class TranscriptionHandler(QObject):
                                     apply_speaker_mapping(summary_path, filtered_mapping)
                                 str_mapping = {str(k): v for k, v in filtered_mapping.items()}
                                 self._app.file_manager.update_speaker_names(item.file_path, str_mapping)
-                                self.log_message.emit(f"已自动识别参会人员: {', '.join(f'Speaker {k}→{v}' for k, v in filtered_mapping.items())}")
+                                self.log_message.emit(f"已自动识别参会人员: {', '.join(f'Speaker {k}->{v}' for k, v in filtered_mapping.items())}")
                                 break
             else:
                 self.log_message.emit(f"摘要生成失败: {summary}")
@@ -887,14 +1038,19 @@ class TranscriptionHandler(QObject):
                 speaker_mapping = self._extract_speaker_mapping_from_summary(summary)
                 if speaker_mapping and self._app and hasattr(self._app, 'file_manager'):
                     # 过滤已被声纹 confirmed 匹配的说话人（不覆盖）
-                    confirmed_ids = {
-                        int(spk_id) + 1
-                        for spk_id, info in (self._voiceprint_match_results or {}).items()
-                        if isinstance(info, dict) and info.get("confidence") == "confirmed"
-                    }
+                    # 支持 int（1-based Speaker N）和 str（本地-N/远程-N）两种 key 格式
+                    confirmed_keys = set()
+                    for spk_id, info in (self._voiceprint_match_results or {}).items():
+                        if isinstance(info, dict) and info.get("confidence") == "confirmed":
+                            if isinstance(spk_id, str) and (spk_id.startswith("mic-") or spk_id.startswith("sys-")):
+                                track, num = spk_id.split("-", 1)
+                                prefix = "本地" if track == "mic" else "远程"
+                                confirmed_keys.add(f"{prefix}-{num}")
+                            else:
+                                confirmed_keys.add(int(spk_id) + 1)
                     filtered_mapping = {
                         k: v for k, v in speaker_mapping.items()
-                        if k not in confirmed_ids
+                        if k not in confirmed_keys
                     }
 
                     if filtered_mapping:
@@ -906,7 +1062,7 @@ class TranscriptionHandler(QObject):
                                     apply_speaker_mapping(summary_path, filtered_mapping)
                                 str_mapping = {str(k): v for k, v in filtered_mapping.items()}
                                 self._app.file_manager.update_speaker_names(item.file_path, str_mapping)
-                                self.log_message.emit(f"已自动识别参会人员: {', '.join(f'Speaker {k}→{v}' for k, v in filtered_mapping.items())}")
+                                self.log_message.emit(f"已自动识别参会人员: {', '.join(f'Speaker {k}->{v}' for k, v in filtered_mapping.items())}")
                                 break
             else:
                 self.log_message.emit(f"摘要生成失败: {summary}")
