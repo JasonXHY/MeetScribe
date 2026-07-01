@@ -250,15 +250,22 @@ class TranscriptionHandler(QObject):
                     self._app.file_manager.update_status(fp, FileStatus.DONE, rpath)
                     self._file_status[fp] = "done"
         elif msg_type == "spk_embeddings":
-            # 处理说话人嵌入向量
-            for spk_id, data in msg[1].items():
-                if isinstance(data, (tuple, list)) and len(data) == 2 and isinstance(data[1], (int, float)):
-                    embedding, quality = data
-                    self._speaker_embeddings[spk_id] = embedding
-                    self._speaker_qualities[spk_id] = quality
+            # 处理说话人嵌入向量（按轨分组存储）
+            data = msg[1]
+            track = data.get("track", "unknown")
+            embeddings = data.get("embeddings", {})
+            if track not in self._speaker_embeddings:
+                self._speaker_embeddings[track] = {}
+            if track not in self._speaker_qualities:
+                self._speaker_qualities[track] = {}
+            for spk_id, emb_data in embeddings.items():
+                if isinstance(emb_data, (tuple, list)) and len(emb_data) == 2 and isinstance(emb_data[1], (int, float)):
+                    embedding, quality = emb_data
+                    self._speaker_embeddings[track][spk_id] = embedding
+                    self._speaker_qualities[track][spk_id] = quality
                 else:
-                    self._speaker_embeddings[spk_id] = data
-                    self._speaker_qualities[spk_id] = DEFAULT_SPK_QUALITY
+                    self._speaker_embeddings[track][spk_id] = emb_data
+                    self._speaker_qualities[track][spk_id] = DEFAULT_SPK_QUALITY
         elif msg_type == "sentences":
             self._sentences = msg[1]
         elif msg_type == "progress":
@@ -391,20 +398,25 @@ class TranscriptionHandler(QObject):
 
             emb_path = os.path.join(result_dir, f"{base}_embeddings.json")
 
-            # 构建该文件的嵌入向量（所有说话人的）
+            # 构建该文件的嵌入向量（支持分组格式）
             emb_data = {}
-            for spk_id, embedding in self._speaker_embeddings.items():
-                # numpy array 转 list 以便 JSON 序列化
-                if hasattr(embedding, 'tolist'):
-                    emb_data[str(spk_id)] = {
-                        "vector": embedding.tolist(),
-                        "quality": self._speaker_qualities.get(spk_id, DEFAULT_SPK_QUALITY),
-                    }
-                else:
-                    emb_data[str(spk_id)] = {
-                        "vector": list(embedding) if embedding is not None else [],
-                        "quality": self._speaker_qualities.get(spk_id, DEFAULT_SPK_QUALITY),
-                    }
+            for track, track_embeddings in self._speaker_embeddings.items():
+                if not isinstance(track_embeddings, dict):
+                    continue
+                for spk_id, embedding in track_embeddings.items():
+                    key = f"{track}-{spk_id}"
+                    if hasattr(embedding, 'tolist'):
+                        emb_data[key] = {
+                            "vector": embedding.tolist(),
+                            "quality": self._speaker_qualities.get(track, {}).get(spk_id, DEFAULT_SPK_QUALITY),
+                            "track": track,
+                        }
+                    else:
+                        emb_data[key] = {
+                            "vector": list(embedding) if embedding is not None else [],
+                            "quality": self._speaker_qualities.get(track, {}).get(spk_id, DEFAULT_SPK_QUALITY),
+                            "track": track,
+                        }
 
             try:
                 with open(emb_path, "w", encoding="utf-8") as f:
@@ -540,9 +552,16 @@ class TranscriptionHandler(QObject):
             return {}
 
         embeddings = {}
-        for spk_id, embedding in self._speaker_embeddings.items():
-            if embedding is not None:
-                embeddings[int(spk_id)] = embedding
+        # 支持两种格式：扁平 {spk_id: emb} 和分组 {"mic": {0: emb}, "sys": {0: emb}}
+        for key, value in self._speaker_embeddings.items():
+            if isinstance(value, dict):
+                # 分组格式：展开为 track-spk_id 格式
+                for spk_id, emb in value.items():
+                    if emb is not None:
+                        embeddings[f"{key}-{spk_id}"] = emb
+            elif value is not None:
+                # 扁平格式（兼容）
+                embeddings[int(key)] = value
         return embeddings
 
     # ══════════════════════════════════════════════════════════

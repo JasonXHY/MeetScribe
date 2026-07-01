@@ -55,15 +55,13 @@ def send_progress(queue, percent, stage, current_file, total_files, eta):
     }))
 
 
-def _send_embeddings(queue, transcriber):
+def _send_embeddings(queue, transcriber, track="unknown"):
     """从 transcriber 提取说话人嵌入向量并发送到主进程"""
     try:
         embeddings = getattr(transcriber, "spk_embeddings", {})
-        logger.debug(f"[WORKER] spk_embeddings count: {len(embeddings)}")
+        logger.debug(f"[WORKER] spk_embeddings count: {len(embeddings)}, track: {track}")
         if embeddings:
-            # 打印每个说话人的嵌入向量维度
             for spk_id, emb in embeddings.items():
-                # emb 是 (embedding_list, quality) 元组
                 if isinstance(emb, (tuple, list)) and len(emb) == 2:
                     emb_list = emb[0]
                     emb_len = len(emb_list) if hasattr(emb_list, '__len__') else 'unknown'
@@ -71,10 +69,10 @@ def _send_embeddings(queue, transcriber):
                     emb_len = len(emb) if hasattr(emb, '__len__') else 'unknown'
                 logger.debug(f"[WORKER] Speaker {spk_id}: embedding dim={emb_len}"
                            f"{', WARN expected 192' if isinstance(emb_len, int) and emb_len != 192 else ''}")
-            queue.put(("spk_embeddings", embeddings))
-            logger.debug("[WORKER] Sent spk_embeddings to main process")
+            queue.put(("spk_embeddings", {"track": track, "embeddings": dict(embeddings)}))
+            logger.debug(f"[WORKER] Sent spk_embeddings for track={track}")
         else:
-            logger.debug("[WORKER] No spk_embeddings to send")
+            logger.debug(f"[WORKER] No spk_embeddings to send for track={track}")
     except Exception as e:
         logger.error(f"[WORKER] Failed to send embeddings: {e}")
 
@@ -179,7 +177,8 @@ def transcribe_worker_process(queue, model_cache_dir, device,
                 per_file_texts[fp] = result
 
                 # 提取并发送说话人嵌入向量（供音色库匹配）
-                _send_embeddings(queue, transcriber)
+                track = "mic" if idx == 0 else "sys"
+                _send_embeddings(queue, transcriber, track=track)
                 # 发送句子数据（供中间片段截取）
                 _send_sentences(queue, transcriber)
             send_progress(queue, 100, "合并完成", len(file_paths), len(file_paths), "")
@@ -225,7 +224,7 @@ def transcribe_worker_process(queue, model_cache_dir, device,
                 )
 
                 # 提取并发送说话人嵌入向量（供音色库匹配）
-                _send_embeddings(queue, transcriber)
+                _send_embeddings(queue, transcriber, track="mic")
                 # 发送句子数据（供中间片段截取）
                 _send_sentences(queue, transcriber)
 
