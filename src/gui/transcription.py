@@ -639,7 +639,7 @@ class TranscriptionHandler(QObject):
                         np.linalg.norm(local_array) * np.linalg.norm(remote_array)
                     ))
                     logger.info(f"[CROSS-TRACK] {local_key} vs {remote_key}: cos_sim={cos_sim:.4f}")
-                    if cos_sim >= HIGH_CONFIDENCE:
+                    if cos_sim >= 0.31:
                         matched_pairs.append((local_key, remote_key, cos_sim))
 
             if not matched_pairs:

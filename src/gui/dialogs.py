@@ -458,51 +458,6 @@ class SpeakerDialog(QDialog):
         """)
         layout.addWidget(subtitle)
 
-        # 批量替换
-        batch_frame = QFrame()
-        batch_frame.setStyleSheet(f"""
-            QFrame {{ background-color: {C_CARD}; border: 1px solid {C_BORDER};
-                border-radius: 8px; }}
-        """)
-        batch_layout = QVBoxLayout(batch_frame)
-        batch_layout.setContentsMargins(12, 10, 12, 10)
-
-        batch_title = QLabel("批量替换")
-        batch_title.setStyleSheet(f"""
-            QLabel {{ color: {C_TXT1}; font-family: {FONT_FAMILY};
-                font-size: 12px; font-weight: bold; }}
-        """)
-        batch_layout.addWidget(batch_title)
-
-        batch_row = QHBoxLayout()
-        batch_row.addWidget(QLabel("将"))
-
-        self._batch_from_combo = QComboBox()
-        self._batch_from_combo.setFixedWidth(140)
-        for s in self._speakers:
-            label = f"{s['label']}" + (f" ({s['name']})" if s.get('name') else "")
-            self._batch_from_combo.addItem(label)
-        batch_row.addWidget(self._batch_from_combo)
-
-        batch_row.addWidget(QLabel("替换为"))
-
-        self._batch_to_entry = QLineEdit()
-        self._batch_to_entry.setPlaceholderText("输入姓名")
-        self._batch_to_entry.setFixedWidth(120)
-        batch_row.addWidget(self._batch_to_entry)
-
-        batch_btn = QPushButton("替换")
-        batch_btn.setFixedSize(60, 30)
-        batch_btn.setStyleSheet(f"""
-            QPushButton {{ background-color: {C_ACCENT}; color: white;
-                border: none; border-radius: 6px; font-size: 12px; }}
-        """)
-        batch_btn.clicked.connect(self._do_batch_replace)
-        batch_row.addWidget(batch_btn)
-
-        batch_layout.addLayout(batch_row)
-        layout.addWidget(batch_frame)
-
         # 说话人列表
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -902,24 +857,6 @@ class SpeakerDialog(QDialog):
             self._speaker_layout.addWidget(container)
 
         self._speaker_layout.addStretch()
-
-    def _do_batch_replace(self):
-        sel = self._batch_from_combo.currentText()
-        new_name = self._batch_to_entry.text().strip()
-        if not new_name:
-            QMessageBox.information(self, "提示", "请输入替换后的姓名")
-            return
-
-        for i, s in enumerate(self._speakers):
-            label = f"{s['label']}" + (f" ({s['name']})" if s.get('name') else "")
-            if label == sel or s['label'] == sel:
-                s['name'] = new_name
-                if i in self._speaker_entries:
-                    self._speaker_entries[i].setText(new_name)
-                break
-
-        self._batch_to_entry.clear()
-        logger.info(f"发言人映射: {sel} → {new_name}")
 
     def _save_to_library(self, idx):
         """保存说话人到音色库（优先使用中间片段嵌入）"""

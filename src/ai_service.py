@@ -233,7 +233,12 @@ class AIService:
         if voiceprint_matches:
             known_lines = []
             for spk_id, info in voiceprint_matches.items():
-                known_lines.append(f"- Speaker {spk_id + 1} = {info['name']}（音色库匹配，置信度: {info['confidence']}）")
+                # 兼容 int key（传统单轨）和 "mic-N"/"sys-N" key（双轨合并）
+                if isinstance(spk_id, str) and '-' in spk_id:
+                    label = spk_id.replace("mic-", "本地-").replace("sys-", "远程-")
+                else:
+                    label = f"Speaker {int(spk_id) + 1}"
+                known_lines.append(f"- {label} = {info['name']}（音色库匹配，置信度: {info['confidence']}）")
             known_speakers_section = "\n\n【已识别的说话人（音色库匹配结果，请在参会人员中使用这些姓名）】\n" + "\n".join(known_lines)
 
         # 构造系统提示词：要求模型输出结构化的中文会议纪要

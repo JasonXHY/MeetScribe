@@ -47,6 +47,20 @@ def parse_transcript_lines(text):
     return lines
 
 
+def _extract_header(text):
+    """从转写文本中提取文件头（--- 分隔线之前的内容）"""
+    lines = text.split('\n')
+    header_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped == '---':
+            break
+        header_lines.append(line)
+    if not header_lines or len(header_lines) == len(lines):
+        return ""
+    return '\n'.join(header_lines).strip()
+
+
 def merge_dual_transcripts(mic_text, sys_text, mic_label="本地", sys_label="远程"):
     """
     合并双轨转写结果
@@ -138,6 +152,10 @@ def build_merged_transcript(file_paths, per_file_texts,
         merged = merge_dual_transcripts(
             mic_text, sys_text, mic_label=mic_label, sys_label=sys_label
         )
+        # 从 mic 轨文本中提取文件头（--- 分隔线之前的内容）
+        header = _extract_header(mic_text)
+        if header:
+            merged = header + "\n\n" + merged
         return merged, True
 
     # 普通多文件合并：按传入顺序拼接，加文件名小标题。
