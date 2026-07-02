@@ -97,7 +97,7 @@ def _send_sentences(queue, transcriber):
 
 def transcribe_worker_process(queue, model_cache_dir, device,
                                file_paths, output_format, speaker_names,
-                               output_dir, merge):
+                               output_dir, merge, cancel_event=None):
     """
     在独立进程中运行转写任务。
     通过 queue 发送消息给主进程:
@@ -123,7 +123,16 @@ def transcribe_worker_process(queue, model_cache_dir, device,
         queue.put(("log", "模型检查通过，开始转写..."))
         queue.put(("heartbeat", "准备加载模型"))
 
+        if cancel_event and cancel_event.is_set():
+            queue.put(("error", "转写已取消"))
+            return
+
         transcriber = Transcriber(model_cache_dir=model_cache_dir, device=device)
+        queue.put(("heartbeat", "模型初始化完成"))
+
+        if cancel_event and cancel_event.is_set():
+            queue.put(("error", "转写已取消"))
+            return
 
         ready, missing = transcriber.check_models_ready()
         if not ready:
@@ -161,6 +170,9 @@ def transcribe_worker_process(queue, model_cache_dir, device,
             import time as _time
             start_time = _time.time()
             for idx, fp in enumerate(file_paths):
+                if cancel_event and cancel_event.is_set():
+                    queue.put(("error", "转写已取消"))
+                    return
                 fname = os.path.basename(fp)
                 queue.put(("log", f"正在转写: {fname}"))
                 queue.put(("heartbeat", f"转写文件 {idx+1}/{len(file_paths)}"))
@@ -206,6 +218,9 @@ def transcribe_worker_process(queue, model_cache_dir, device,
             import time as _time
             start_time = _time.time()
             for idx, fp in enumerate(file_paths):
+                if cancel_event and cancel_event.is_set():
+                    queue.put(("error", "转写已取消"))
+                    return
                 fname = os.path.basename(fp)
                 queue.put(("processing", fp))
                 queue.put(("log", f"正在转写: {fname}"))

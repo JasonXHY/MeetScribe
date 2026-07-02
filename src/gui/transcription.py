@@ -44,6 +44,7 @@ class TranscriptionHandler(QObject):
         self._transcribing = False
         self._queue = None
         self._thread = None
+        self._cancel_event = threading.Event()
         self._ai_service = None
         self._file_status = {}
         self._progress = TranscriptionProgress()
@@ -62,7 +63,7 @@ class TranscriptionHandler(QObject):
         self._names_applied = False  # 防重入标记
         self._active_workers = []  # 保持 Worker 引用，防止 GC 回收
         self._last_heartbeat = 0  # 上次收到心跳的时间戳
-        self._heartbeat_timeout = 120  # 心跳超时秒数
+        self._heartbeat_timeout = 300  # 心跳超时秒数（5分钟，电池模式需充足余量）
         self._cross_track_pairs = []  # 跨轨匹配对: [(local_label, remote_label, score)]
 
     @property
@@ -146,6 +147,7 @@ class TranscriptionHandler(QObject):
         self._done_called = False  # 重置防重入标记
         self._names_applied = False  # 重置姓名应用防重入标记
         self._last_heartbeat = time.time()  # 重置心跳时间戳
+        self._cancel_event.clear()  # 重置取消信号
 
         # 重置说话人相关数据
         self._speaker_embeddings = {}
@@ -174,6 +176,7 @@ class TranscriptionHandler(QObject):
                 task.speaker_names,
                 task.out_dir,
                 task.merge,
+                self._cancel_event,
             ),
             daemon=True,
         )
@@ -215,7 +218,7 @@ class TranscriptionHandler(QObject):
             if elapsed > self._heartbeat_timeout:
                 logger.error(f"转写超时：线程 {elapsed:.0f} 秒无响应")
                 self.log_message.emit(f"转写超时：线程 {elapsed:.0f} 秒无响应")
-                # daemon 线程会在主线程退出时自动终止
+                self._cancel_event.set()  # 通知 worker 线程停止
                 self._transcribing = False
                 self._poll_timer.stop()
                 self._on_done()
@@ -1188,8 +1191,9 @@ class TranscriptionHandler(QObject):
 
         self._transcribing = False  # 立即置 False，防止重入
         self._poll_timer.stop()
+        self._cancel_event.set()  # 通知 worker 线程停止
 
-        # 等待线程结束（daemon 线程会在主线程退出时自动终止）
+        # 等待线程结束
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5)
 
