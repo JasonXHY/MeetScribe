@@ -240,10 +240,20 @@ class UnifiedRecorder:
                 except queue.Empty:
                     break
 
+        # 同小时多次录音自动加后缀：070214会议.wav → 070214会议_2.wav
         if mode in ("mic", "dual"):
-            self._mic_file = os.path.join(self.save_dir, f"{ts}会议.wav")
+            base = os.path.join(self.save_dir, f"{ts}会议")
+            mic_path = f"{base}.wav"
+            if os.path.exists(mic_path):
+                n = 2
+                while os.path.exists(f"{base}_{n}.wav"):
+                    n += 1
+                mic_path = f"{base}_{n}.wav"
+            self._mic_file = mic_path
         if mode == "dual":
-            self._sys_file = os.path.join(self.save_dir, f"{ts}会议{SYS_TRACK_SUFFIX}.wav")
+            # 系统音频轨跟随麦克风轨的后缀
+            base = os.path.splitext(self._mic_file)[0]
+            self._sys_file = f"{base}{SYS_TRACK_SUFFIX}.wav"
 
         self._recording = True
         self._paused = False
