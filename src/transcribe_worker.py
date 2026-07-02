@@ -8,6 +8,7 @@ MeetScribe 多进程转写工作函数
 import os
 import sys
 import logging
+import threading
 
 # ── 子进程初始化：修复 Windows "spawn" 模式下 stdout/stderr 为 None 的问题 ──
 # 这必须在任何其他导入之前执行
@@ -42,6 +43,12 @@ if not _sub_logger.handlers:
     _sub_logger.addHandler(_fh)
 
 logger = _sub_logger
+
+
+def _heartbeat_loop(queue, stop_event, interval=30):
+    """推理期间后台发送心跳，防止主进程误判超时"""
+    while not stop_event.wait(interval):
+        queue.put(("heartbeat", "inference"))
 
 
 def send_progress(queue, percent, stage, current_file, total_files, eta):
@@ -181,11 +188,19 @@ def transcribe_worker_process(queue, model_cache_dir, device,
                 eta_str = f"{eta_sec // 60}分{eta_sec % 60}秒" if eta_sec > 0 else "计算中..."
                 send_progress(queue, int(idx / len(file_paths) * 100),
                               f"转写 {idx+1}/{len(file_paths)}", idx, len(file_paths), eta_str)
-                result = transcriber.transcribe(
-                    audio_path=fp, output_format=output_format,
-                    speaker_names=speaker_names,
-                    progress_callback=progress_cb,
-                )
+                # 推理期间启动心跳线程，防止主进程误判超时
+                inference_stop = threading.Event()
+                hb = threading.Thread(target=_heartbeat_loop, args=(queue, inference_stop), daemon=True)
+                hb.start()
+                try:
+                    result = transcriber.transcribe(
+                        audio_path=fp, output_format=output_format,
+                        speaker_names=speaker_names,
+                        progress_callback=progress_cb,
+                    )
+                finally:
+                    inference_stop.set()
+                    hb.join(timeout=5)
                 per_file_texts[fp] = result
 
                 # 提取并发送说话人嵌入向量（供音色库匹配）
@@ -232,11 +247,19 @@ def transcribe_worker_process(queue, model_cache_dir, device,
                 send_progress(queue, int(idx / len(file_paths) * 100),
                               f"转写 {idx+1}/{len(file_paths)}", idx, len(file_paths), eta_str)
 
-                result = transcriber.transcribe(
-                    audio_path=fp, output_format=output_format,
-                    speaker_names=speaker_names,
-                    progress_callback=progress_cb,
-                )
+                # 推理期间启动心跳线程，防止主进程误判超时
+                inference_stop = threading.Event()
+                hb = threading.Thread(target=_heartbeat_loop, args=(queue, inference_stop), daemon=True)
+                hb.start()
+                try:
+                    result = transcriber.transcribe(
+                        audio_path=fp, output_format=output_format,
+                        speaker_names=speaker_names,
+                        progress_callback=progress_cb,
+                    )
+                finally:
+                    inference_stop.set()
+                    hb.join(timeout=5)
 
                 # 提取并发送说话人嵌入向量（供音色库匹配）
                 _send_embeddings(queue, transcriber, track="mic")

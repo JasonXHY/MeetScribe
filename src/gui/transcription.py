@@ -63,7 +63,7 @@ class TranscriptionHandler(QObject):
         self._names_applied = False  # 防重入标记
         self._active_workers = []  # 保持 Worker 引用，防止 GC 回收
         self._last_heartbeat = 0  # 上次收到心跳的时间戳
-        self._heartbeat_timeout = 300  # 心跳超时秒数（5分钟，电池模式需充足余量）
+        self._heartbeat_timeout = 600  # 心跳超时秒数（10分钟，给长音频推理留足余量）
         self._cross_track_pairs = []  # 跨轨匹配对: [(local_label, remote_label, score)]
 
     @property

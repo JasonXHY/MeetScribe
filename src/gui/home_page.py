@@ -408,7 +408,7 @@ class HomePage(QWidget):
     def _on_rec_mode_change(self, mode):
         """录音模式切换"""
         if self._app and hasattr(self._app, 'config'):
-            self._app.config.set("recording_mode", mode)
+            self._app.config.set("recording_mode", mode, save=False)
             self._app.config.save()
         self._log(f"录音模式切换为: {mode}")
 

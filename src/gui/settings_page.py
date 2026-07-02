@@ -786,46 +786,46 @@ class SettingsPage(QWidget):
             self._api_key_hint.setStyleSheet(f"color: {C_ERROR}; font-size: 10px; background: transparent; border: none; padding-left: 108px;")
 
     def _on_save(self):
-        """保存设置"""
+        """保存设置（批量写入，减少 GIL 竞争）"""
         if not self._config:
             QMessageBox.warning(self, "错误", "配置对象未初始化")
             return
 
-        self._config.set("recording_dir", self._rec_dir_entry.text())
-        self._config.set("transcript_dir", self._out_dir_entry.text())
+        self._config.set("recording_dir", self._rec_dir_entry.text(), save=False)
+        self._config.set("transcript_dir", self._out_dir_entry.text(), save=False)
 
         if hasattr(self, '_engine_combo'):
             engine_text = self._engine_combo.currentText()
             engine_map = {"FunASR (本地)": "funasr", "MiMo ASR (云端)": "mimo"}
-            self._config.set("transcription_engine", engine_map.get(engine_text, "funasr"))
+            self._config.set("transcription_engine", engine_map.get(engine_text, "funasr"), save=False)
 
-        self._config.set("punc_restore", self._punc_var.currentText())
-        self._config.set("garble_filter", self._garble_var.currentText())
-        self._config.set("vad_sensitivity", self._vad_var.currentText())
-        self._config.set("device", self._device_var.currentText())
+        self._config.set("punc_restore", self._punc_var.currentText(), save=False)
+        self._config.set("garble_filter", self._garble_var.currentText(), save=False)
+        self._config.set("vad_sensitivity", self._vad_var.currentText(), save=False)
+        self._config.set("device", self._device_var.currentText(), save=False)
 
         if hasattr(self, '_vendor_combo'):
-            self._config.set("ai_vendor", self._vendor_combo.currentText())
+            self._config.set("ai_vendor", self._vendor_combo.currentText(), save=False)
         if hasattr(self, '_model_combo'):
-            self._config.set("ai_model", self._model_combo.currentText())
+            self._config.set("ai_model", self._model_combo.currentText(), save=False)
         if hasattr(self, '_api_key_entry'):
             key_text = self._api_key_entry.text().strip()
-            self._config.set("ai_user_api_key", key_text)
+            self._config.set("ai_user_api_key", key_text, save=False)
         if hasattr(self, '_access_mode_combo'):
-            self._config.set("ai_access_mode", self._access_mode_combo.currentText())
+            self._config.set("ai_access_mode", self._access_mode_combo.currentText(), save=False)
         if hasattr(self, '_ollama_combo'):
-            self._config.set("ollama_enabled", self._ollama_combo.currentText())
+            self._config.set("ollama_enabled", self._ollama_combo.currentText(), save=False)
         if hasattr(self, '_ollama_url_entry'):
-            self._config.set("ollama_url", self._ollama_url_entry.text().strip())
+            self._config.set("ollama_url", self._ollama_url_entry.text().strip(), save=False)
         if hasattr(self, '_ollama_model_entry'):
-            self._config.set("ollama_model", self._ollama_model_entry.text().strip())
+            self._config.set("ollama_model", self._ollama_model_entry.text().strip(), save=False)
         if hasattr(self, '_auto_summary_combo'):
-            self._config.set("auto_summary", self._auto_summary_combo.currentText())
+            self._config.set("auto_summary", self._auto_summary_combo.currentText(), save=False)
         if hasattr(self, '_auto_correction_combo'):
-            self._config.set("auto_correction", self._auto_correction_combo.currentText())
+            self._config.set("auto_correction", self._auto_correction_combo.currentText(), save=False)
 
         if hasattr(self, '_notification_cb'):
-            self._config.set("enable_notification", self._notification_cb.isChecked())
+            self._config.set("enable_notification", self._notification_cb.isChecked(), save=False)
 
         self._config.save()
         self._refresh_api_key_hint()
