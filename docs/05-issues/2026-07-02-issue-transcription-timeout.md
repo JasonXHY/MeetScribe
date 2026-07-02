@@ -100,3 +100,70 @@ def _on_vb_cable_changed(self, state):
 3. **修复方向选择**：需要 Qoder 评估方案 A/B/C 的可行性和风险。方案 A（恢复 multiprocessing）最彻底但改动大；方案 B 最简单但不解决 GIL 问题。
 
 4. **VB-Cable 设置**：`_on_save()` 缺少 `use_vb_cable` 的显式保存，这是一个独立的 bug，与转写超时无关。
+
+---
+
+## 决策：实施方案 A（subprocess + CREATE_NO_WINDOW + 文件通信）
+
+### 决策理由
+
+1. **monkey-patch 方案不可行**：`_winapi.CreateProcess` 是 C 扩展函数，`dwCreationFlags` 硬编码为 0，无法 patch
+2. **threading 方案不彻底**：GIL 竞争导致电池模式转写超时，用户体验差
+3. **接受黑色窗口不可行**：这是用户明确要求解决的问题，且是安装版本的重要缺陷
+
+### 方案 A 详细设计
+
+**核心思路**：用 `subprocess.Popen` + `CREATE_NO_WINDOW` 启动转写 worker，替代 `multiprocessing.Process`。IPC 从 `multiprocessing.Queue` 改为临时文件（JSON Lines 格式）。
+
+**改动范围**：
+
+| 文件 | 改动 |
+|------|------|
+| `src/gui/transcription.py` | `_execute_task()` 改用 subprocess.Popen + 文件轮询 |
+| `src/transcribe_worker.py` | 改为 CLI 入口，通过文件写消息，支持 cancel_event |
+| `src/transcribe_worker_cli.py`（新建） | 独立 CLI 入口，解析参数，调用 transcribe_worker_process |
+
+**通信机制**：
+- 主进程创建临时目录 + 参数 JSON 文件
+- subprocess 启动 worker CLI，读取参数，转写结果写入 JSON Lines 消息文件
+- 主进程定时轮询消息文件（复用现有 QTimer + _poll 机制）
+- 取消信号：主进程写入 cancel 标记文件，worker 定期检查
+
+**关键代码模式**：
+```python
+# 主进程启动 worker
+import subprocess, sys, json, tempfile
+
+params = {"model_cache_dir": ..., "file_paths": [...], ...}
+params_dir = tempfile.mkdtemp(prefix="ms_transcribe_")
+params_path = os.path.join(params_dir, "params.json")
+with open(params_path, "w") as f:
+    json.dump(params, f)
+
+msg_path = os.path.join(params_dir, "messages.jsonl")
+cancel_path = os.path.join(params_dir, "cancel")
+
+cmd = [sys.executable, "-m", "transcribe_worker_cli",
+       "--params", params_path, "--messages", msg_path, "--cancel", cancel_path]
+
+creation_flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+self._process = subprocess.Popen(cmd, creationflags=creation_flags)
+
+# 主进程轮询消息文件（复用 QTimer）
+# worker 写入：{"type": "heartbeat", "data": "..."} 每行一条 JSON
+```
+
+**需要 Qoder 评估的风险点**：
+
+1. **临时文件清理**：转写完成后需删除 params_dir，异常退出时需清理。建议用 atexit 或 finally 块
+2. **文件锁竞争**：主进程读 + worker 写同一文件，JSON Lines 追加写入是原子的（单行 append），读取时可能读到半行。建议 worker 每条消息 flush，主进程按行读取
+3. **worker 进程残留**：subprocess 需要在超时时 terminate + kill。已有 `process.terminate()` 和 `process.kill()` 支持
+4. **PyInstaller 兼容性**：`sys.executable` 在 frozen 模式下是 exe 本身，需确保 CLI 入口能被 exe 正确启动（`-m transcribe_worker_cli` 需要 worker 模块在 PyInstaller 的 hiddenimports 中）
+5. **参数传递大小**：音频文件路径列表可能很长，JSON 序列化无问题。但如果将来传递音频数据本身，文件方案可能不够高效
+
+**实施步骤**：
+1. 创建 `transcribe_worker_cli.py`（CLI 入口）
+2. 修改 `transcription.py` 的 `_execute_task()` 和 `_poll()`（用 subprocess + 文件轮询替代 threading + queue）
+3. 修改 `transcribe_worker.py` 的消息发送（写文件替代 queue.put）
+4. 修改 `me.spec` 添加 hiddenimports
+5. 测试：单文件转写、双轨转写、超时取消、手动停止
