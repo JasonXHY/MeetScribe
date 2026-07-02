@@ -827,6 +827,10 @@ class SettingsPage(QWidget):
         if hasattr(self, '_notification_cb'):
             self._config.set("enable_notification", self._notification_cb.isChecked(), save=False)
 
+        # VB-Cable 开关显式保存（回调可能在初始化时被 setChecked 触发，值不一定正确）
+        if hasattr(self, '_vb_cable_cb'):
+            self._config.set("use_vb_cable", self._vb_cable_cb.isChecked(), save=False)
+
         self._config.save()
         self._refresh_api_key_hint()
         self._log("设置已保存")
