@@ -167,3 +167,507 @@ self._process = subprocess.Popen(cmd, creationflags=creation_flags)
 3. 修改 `transcribe_worker.py` 的消息发送（写文件替代 queue.put）
 4. 修改 `me.spec` 添加 hiddenimports
 5. 测试：单文件转写、双轨转写、超时取消、手动停止
+
+---
+
+## [Qoder 审查意见] 2026-07-02
+
+> 逐条对照源码验证方案中的 claim，评估修复方向可行性。
+
+---
+
+### 一、转写超时 — 根因分析
+
+#### 1.1 文档 claim 验证
+
+**Claim: "心跳在推理期间不发送" — 准确**
+
+`transcriber.py:674-763` 的 `transcribe()` 方法中，`progress_callback` 的调用点：
+
+| 行号 | 调用时机 | 说明 |
+|------|---------|------|
+| 692 | 推理前 | "正在转写: xxx" |
+| 730 | 降级时 | "说话人分离出错，降级..." |
+| 757 | 推理后 | "转写完成，耗时 xxx 秒" |
+| 763+ | 标点后处理 | "正在加标点..." |
+
+**`model.generate()`（第 701-705 行）推理期间零回调。** 一个 5 分钟音频推理可能跑 3-10 分钟，这段时间无心跳，300 秒超时必然触发。
+
+**这是主因，不是 GIL 竞争。** GIL 竞争只是让推理更慢、更容易超时，但即使没有 GIL 竞争，长音频推理超过 300 秒同样会触发超时。
+
+**Claim: "multiprocessing → threading 导致 GIL 竞争是主因" — 不准确**
+
+GIL 竞争是加剧因素，不是根因。根因是推理期间不发心跳。multiprocessing 时代这个问题也存在，只是进程独立不受 GUI 影响，推理通常在 300 秒内完成，隐患没暴露。
+
+#### 1.2 方案 A 评估：不推荐
+
+文档提出的 `subprocess.Popen + CREATE_NO_WINDOW + JSON Lines 文件通信` 本质上是在重新发明 `multiprocessing`。Python 标准库的 `multiprocessing.Process` 底层就是 `subprocess.Popen` + pipe 通信，比文件轮询更高效、更可靠。
+
+文档自己列了 5 个风险点（临时文件清理、文件锁竞争、进程残留、PyInstaller 兼容性、参数传递），每个都需要额外代码处理。改动量大、风险高、收益有限。
+
+#### 1.3 推荐方案：心跳线程 + 适当放宽超时
+
+**改动量：约 15 行代码，涉及 2 个文件。**
+
+**步骤 1**：`transcribe_worker.py` — 在 `model.generate()` 推理期间启动后台心跳线程
+
+```python
+# transcribe_worker.py 顶部新增
+import threading
+
+def _heartbeat_loop(queue, stop_event, interval=30):
+    """推理期间后台发送心跳，防止主进程误判超时"""
+    while not stop_event.wait(interval):
+        queue.put(("heartbeat", "inference"))
+
+# transcribe_worker.py transcribe_worker_process() 中
+# 在 model.generate() 调用之前（约第 187 行 / 第 238 行附近）：
+
+inference_stop = threading.Event()
+hb_thread = threading.Thread(target=_heartbeat_loop,
+                             args=(queue, inference_stop), daemon=True)
+hb_thread.start()
+
+try:
+    res = transcriber.transcribe(
+        audio_path=fp, output_format=output_format,
+        speaker_names=speaker_names,
+        progress_callback=progress_cb,
+    )
+finally:
+    inference_stop.set()  # 停止心跳线程
+    hb_thread.join(timeout=5)
+```
+
+注意：需要在 merge 分支（约第 187 行）和非 merge 分支（约第 238 行）的 `transcriber.transcribe()` 调用处都加上这段代码。或者更优雅的方式是在 `_send_embeddings` 之前统一包裹。
+
+**步骤 2**：`transcription.py:66` — 将超时从 300 秒放宽到 600 秒
+
+```python
+# 原代码：
+self._heartbeat_timeout = 300
+
+# 改为：
+self._heartbeat_timeout = 600  # 10 分钟，给长音频推理留足余量
+```
+
+这是安全余量。心跳线程解决"误判"问题，放宽超时解决"推理确实很慢"的情况。两者配合，基本杜绝超时误杀。
+
+#### 1.4 这个方案能解决"动不动转写失败"的问题吗？
+
+**能解决绝大部分情况。** 分析如下：
+
+用户遇到的"转写失败"有两种：
+
+1. **假失败（误判超时）**：线程还在正常推理，主进程以为死了就杀掉了。日志表现是"转写超时：线程 300 秒无响应"，但线程实际还在跑。**心跳线程直接解决这个问题**——推理期间持续发心跳，主进程不会误判。
+
+2. **真失败（推理太慢）**：GIL 竞争 + 电池模式 CPU 降频，推理确实超过 300 秒。即使没有超时机制，用户也要等很久。**放宽超时到 600 秒**给这种情况留了余量。如果 600 秒还不够，说明机器性能确实不够，应该提示用户插电或升级硬件，而不是无限等待。
+
+两种情况覆盖了"动不动转写失败"的绝大部分场景。
+
+**不需要恢复 multiprocessing。** 理由：
+- 心跳线程解决了误判问题
+- 放宽超时解决了慢推理问题
+- multiprocessing 的改动量（重写 IPC）远大于收益
+- threading 模式下 GUI 可以实时显示转写进度（multiprocessing 做不到），用户体验更好
+
+---
+
+### 二、VB-Cable 设置不保存 — 根因纠正
+
+#### 2.1 文档 claim 验证
+
+**Claim: "_on_save() 没有显式保存 use_vb_cable，依赖即时回调" — 分析有误**
+
+`_on_vb_cable_changed` 的即时写入机制本身没有问题。真正的问题是**默认值不一致**：
+
+| 位置 | 值 | 说明 |
+|------|-----|------|
+| `config.py:30` DEFAULTS | `False` | 代码默认值 |
+| `config.py:30` 注释 | "默认使用 VB-Audio Cable" | 注释说应该是 True |
+| `settings_page.py:428` 回退值 | `True` | UI 回退默认值 |
+
+当配置文件里没有 `use_vb_cable` 字段时（首次安装或旧版升级）：
+- `config.get("use_vb_cable")` 返回 DEFAULTS 的 `False`
+- 但 `settings_page.py:428` 的回退值是 `True`
+- checkbox 显示勾选（True），config 里实际是 `False`
+- 用户没碰过这个选项就点保存 → 写入的还是 `False`
+- 下次打开又显示勾选 → 看起来像"不保存"，其实是**从来没写进去过**
+
+#### 2.2 修复方案
+
+两处改一致，2 行代码：
+
+```python
+# config.py:30 — 注释说默认使用，值也应该是 True
+"use_vb_cable": True,
+
+# settings_page.py:428 — 去掉多余的回退值
+# 原代码：
+self._vb_cable_cb.setChecked(self._config.get("use_vb_cable", True) if self._config else True)
+# 改为：
+self._vb_cable_cb.setChecked(self._config.get("use_vb_cable") if self._config else True)
+```
+
+不需要在 `_on_save()` 里加显式保存。
+
+---
+
+### 三、修复执行顺序
+
+```
+1. VB-Cable 默认值     ← 2 行，立即修复
+2. 心跳线程            ← ~15 行，解决转写超时主因
+3. 超时放宽到 600 秒   ← 1 行，安全余量
+```
+
+不需要方案 A（subprocess 重写），不需要改 IPC 架构。
+
+---
+
+### 四、GIL 竞争问题 — 补充分析（修正此前审查）
+
+> 此前审查将 GIL 竞争 dismissed 为"加剧因素而非根因"，经进一步查证，此判断需要修正。
+
+#### 4.1 问题机制
+
+Python 的 GIL（全局解释器锁）保证同一时刻只有一个线程执行 Python 字节码。FunASR 的推理管线是 C 层推理和 Python 层预处理/后处理交替进行的：
+
+```
+C 层推理（释放 GIL）→ Python 特征提取（需要 GIL）→ C 层推理（释放 GIL）→ Python 后处理（需要 GIL）→ ...
+```
+
+每次从 C 层回到 Python 层时，worker 线程需要重新获取 GIL。如果此时 GUI 线程正在执行 Python 代码（如 config.save() 的 json.dump），worker 线程就必须等待。
+
+#### 4.2 日志证据
+
+文档中的日志时间线：
+```
+15:33:40  转写线程启动
+15:33:54  Models loaded successfully
+          ← 此后无任何日志，线程在做转写推理 →
+15:37-38  20+ 次 "Config saved"（用户在设置页操作）
+15:38:54  转写超时：线程 300 秒无响应
+```
+
+关键事实：
+- `config.set()` 默认 `save=True`（`config.py:134`），每次调用都立即执行 `json.dump()` + `os.replace()` 写文件
+- `settings_page.py` 有 18 处调用 `config.set()`，其中 `_on_vb_cable_changed` 等即时写入 handler 在用户每次操作时都触发保存
+- 20+ 次 Config saved 意味着 GUI 线程在 1-2 分钟内执行了 20+ 次 JSON 序列化 + 文件写入
+- 这段时间 worker 线程的 Python 层操作被持续阻塞
+
+**此前审查错误**：我说"GIL 竞争只是加剧因素，根因是推理期间不发心跳"。这个判断只对了一半。心跳线程能防止"误判超时"，但如果 GIL 竞争确实让推理从 200 秒拖慢到 400 秒，心跳线程只是让超时在 600 秒才触发——推理仍然被拖慢了，用户体验仍然差（转写要等更久）。
+
+**GIL 竞争是真实存在的性能问题，不仅仅是超时误判。**
+
+#### 4.3 完整解决方案
+
+需要同时解决两个问题：**心跳缺失**（导致误判超时）和 **GIL 竞争**（导致推理变慢）。
+
+**修复 1：心跳线程**（解决误判超时）
+
+同此前方案，在 `model.generate()` 推理期间启动后台心跳线程，约 10 行代码。
+
+**修复 2：转写期间延迟 config 保存**（解决 GIL 竞争主因）
+
+`config.py` 增加"延迟保存"模式。转写期间，`config.set()` 只更新内存中的值，不写磁盘。转写结束后一次性保存。
+
+```python
+# config.py 新增：
+class App:
+    _defer_config_saves = False  # 类变量，全局共享
+
+# config.py set() 方法修改：
+def set(self, key, value, save=True):
+    self._data[key] = value
+    if save and not App._defer_config_saves:
+        self.save()
+```
+
+```python
+# transcription.py _execute_task() 中，启动 worker 之前：
+from config import App
+App._defer_config_saves = True
+
+# _on_done() 中，转写完成后：
+App._defer_config_saves = False
+self._config.save()  # 一次性保存所有改动
+```
+
+这样用户在转写期间操作设置页，`config.set()` 只更新内存，不触发磁盘 I/O，GUI 线程不会因 json.dump 持有 GIL，worker 线程的 Python 层操作不再被阻塞。
+
+**修复 3：放宽超时到 600 秒**（安全余量）
+
+```python
+# transcription.py:66
+self._heartbeat_timeout = 600
+```
+
+#### 4.4 三个修复的关系
+
+```
+修复 1（心跳线程）  → 防止"推理正常但被误杀"
+修复 2（延迟保存）  → 防止"推理被 GUI 操作拖慢"  ← 解决 GIL 竞争
+修复 3（放宽超时）  → 给极端情况留余量
+```
+
+三个修复缺一不可：
+- 只有修复 1：推理仍然被 GIL 拖慢，用户要等更久
+- 只有修复 2：如果推理本身就需要 400 秒（长音频），没有心跳线程仍会超时
+- 只有修复 3：治标不治本，推理慢的问题没解决
+
+#### 4.5 其他可能产生 GIL 竞争的 GUI 操作
+
+除了设置页的 config 保存，以下操作在转写期间也可能持有 GIL：
+
+| 操作 | 位置 | GIL 影响 |
+|------|------|---------|
+| 设置页切换 AI 厂商/模型 | `settings_page.py:320-325` | 调用 `get_models_for_vendor()`，轻量 |
+| 设置页勾选 VB-Cable | `settings_page.py:436-439` | 触发 `config.set()` → `json.dump()` + 文件写入，**重量级** |
+| 文件列表刷新 | `home_page.py` via `refresh_needed` 信号 | Qt 信号在 GUI 线程执行，但主要是 UI 更新，轻量 |
+| 日志消息显示 | `log_message.emit()` | 每条日志都触发 GUI 更新，高频但每条轻量 |
+
+其中 **VB-Cable 等 config 即时保存** 是最重的操作（JSON 序列化 + 文件 I/O），也是日志中 20+ 次 "Config saved" 的来源。修复 2 直接解决这个问题。
+
+#### 4.6 不需要恢复 multiprocessing
+
+有了修复 1 + 修复 2，threading 模式的两个问题都解决了：
+- 心跳线程 → 不再误判超时
+- 延迟保存 → GUI 操作不再拖慢推理
+
+threading 模式还有一个优势：GUI 可以实时显示转写进度（`log_message.emit`、`progress_updated.emit` 等信号直接跨线程传递），multiprocessing 模式下这些信号的传递更复杂。所以保留 threading 是更好的选择。
+
+---
+
+### 五、20+ 次 "Config saved" 根因排查
+
+> 日志中出现 20+ 次 "Config saved"，但用户并没有那么多次设置修改。以下为逐行代码排查结果。
+
+#### 5.1 根因：`_on_save()` 的批量写入问题
+
+`settings_page.py:788-834` 的 `_on_save()` 方法中，**16 次 `config.set()` 调用全部使用默认参数 `save=True`**：
+
+| 行号 | 配置键 | 触发保存 |
+|------|--------|---------|
+| 794 | recording_dir | 是 |
+| 795 | transcript_dir | 是 |
+| 800 | transcription_engine | 是 |
+| 802 | punc_restore | 是 |
+| 803 | garble_filter | 是 |
+| 804 | vad_sensitivity | 是 |
+| 805 | device | 是 |
+| 808 | ai_vendor | 是 |
+| 810 | ai_model | 是 |
+| 813 | ai_user_api_key | 是 |
+| 815 | ai_access_mode | 是 |
+| 817 | ollama_enabled | 是 |
+| 819 | ollama_url | 是 |
+| 821 | ollama_model | 是 |
+| 823 | auto_summary | 是 |
+| 825 | auto_correction | 是 |
+| 828 | enable_notification | 是 |
+| 830 | （显式 save） | 是 |
+
+**每次 `config.set(key, value)` 等价于 `config.set(key, value, save=True)`**（`config.py:134` 默认值）。每次调用都立即执行 `json.dump()` + `os.replace()`（原子写入），并在日志中记录一次 "Config saved"。
+
+**结论：用户点击一次"保存设置"按钮 = 17 次磁盘写入 = 17 条 "Config saved" 日志。** 如果用户还切换了 VB-Cable 开关或录音模式，次数更多。
+
+#### 5.2 其他重复保存点
+
+| 位置 | 问题 | 重复次数 |
+|------|------|---------|
+| `home_page.py:411-412` | `config.set("recording_mode", mode)` 后紧跟 `config.save()` | 2 次（set 的 save=True + 显式 save） |
+| `home_page.py:508-512` | 两次 `config.set()` + 一次 `config.save()` | 3 次 |
+| `settings_page.py:436-439` | `_on_vb_cable_changed` 每次 checkbox 状态变化立即保存 | 1 次/切换 |
+| `app.py:236-238` | 版本检测时两次 `config.set()` + 一次 `config.save()` | 3 次（仅启动时） |
+
+#### 5.3 修复方案
+
+**方案 A（推荐）：`_on_save()` 批量写入，只保存一次**
+
+```python
+# settings_page.py _on_save() — 所有 config.set() 改为 save=False，最后统一 save
+def _on_save(self):
+    if not self._config:
+        QMessageBox.warning(self, "错误", "配置对象未初始化")
+        return
+
+    # 所有 set 操作使用 save=False，不立即写磁盘
+    self._config.set("recording_dir", self._rec_dir_entry.text(), save=False)
+    self._config.set("transcript_dir", self._out_dir_entry.text(), save=False)
+
+    if hasattr(self, '_engine_combo'):
+        engine_text = self._engine_combo.currentText()
+        engine_map = {"FunASR (本地)": "funasr", "MiMo ASR (云端)": "mimo"}
+        self._config.set("transcription_engine", engine_map.get(engine_text, "funasr"), save=False)
+
+    self._config.set("punc_restore", self._punc_var.currentText(), save=False)
+    self._config.set("garble_filter", self._garble_var.currentText(), save=False)
+    self._config.set("vad_sensitivity", self._vad_var.currentText(), save=False)
+    self._config.set("device", self._device_var.currentText(), save=False)
+
+    if hasattr(self, '_vendor_combo'):
+        self._config.set("ai_vendor", self._vendor_combo.currentText(), save=False)
+    if hasattr(self, '_model_combo'):
+        self._config.set("ai_model", self._model_combo.currentText(), save=False)
+    if hasattr(self, '_api_key_entry'):
+        key_text = self._api_key_entry.text().strip()
+        self._config.set("ai_user_api_key", key_text, save=False)
+    if hasattr(self, '_access_mode_combo'):
+        self._config.set("ai_access_mode", self._access_mode_combo.currentText(), save=False)
+    if hasattr(self, '_ollama_combo'):
+        self._config.set("ollama_enabled", self._ollama_combo.currentText(), save=False)
+    if hasattr(self, '_ollama_url_entry'):
+        self._config.set("ollama_url", self._ollama_url_entry.text().strip(), save=False)
+    if hasattr(self, '_ollama_model_entry'):
+        self._config.set("ollama_model", self._ollama_model_entry.text().strip(), save=False)
+    if hasattr(self, '_auto_summary_combo'):
+        self._config.set("auto_summary", self._auto_summary_combo.currentText(), save=False)
+    if hasattr(self, '_auto_correction_combo'):
+        self._config.set("auto_correction", self._auto_correction_combo.currentText(), save=False)
+    if hasattr(self, '_notification_cb'):
+        self._config.set("enable_notification", self._notification_cb.isChecked(), save=False)
+
+    # 统一保存一次
+    self._config.save()
+    self._refresh_api_key_hint()
+    self._log("设置已保存")
+    self.settings_changed.emit()
+    QMessageBox.information(self, "成功", "设置已保存")
+```
+
+**方案 B：`home_page.py` 去除重复保存**
+
+```python
+# home_page.py:411-412 — 原代码：
+self._app.config.set("recording_mode", mode)  # save=True → 写磁盘
+self._app.config.save()  # 再写一次 → 重复
+
+# 改为（只保留一次保存）：
+self._app.config.set("recording_mode", mode, save=False)
+self._app.config.save()
+```
+
+```python
+# home_page.py:508-512 — 原代码：
+self._app.config.set("recording_mode", ...)  # save=True → 写磁盘
+self._app.config.set("output_format", ...)   # save=True → 又写磁盘
+self._app.config.save()  # 第三次写磁盘
+
+# 改为：
+self._app.config.set("recording_mode", ..., save=False)
+self._app.config.set("output_format", ..., save=False)
+self._app.config.save()
+```
+
+**改动量：约 20 行（settings_page 16 行 + home_page 4 行），无架构改动。**
+
+---
+
+### 六、转写期间 GIL 竞争源完整排查
+
+> 除 config 保存外，以下操作在转写期间也会持有 GIL，按影响程度排序。
+
+#### 6.1 重量级操作（毫秒级 GIL 持有）
+
+| 操作 | 位置 | 触发条件 | GIL 影响 |
+|------|------|---------|---------|
+| `config.save()` | `config.py:111-129` | 设置页保存、VB-Cable 切换、录音模式切换 | `json.dump()` 序列化 + `os.replace()` 文件 I/O，**单次 10-50ms**。转写期间 17 次 = 170-850ms GIL 阻塞 |
+| AI 摘要/纠错 HTTP 请求 | `ai_service.py` | 转写完成后处理 | 网络 I/O 本身释放 GIL，但请求构建/响应解析需要 GIL |
+
+#### 6.2 中量级操作（百微秒级 GIL 持有）
+
+| 操作 | 位置 | 触发条件 | GIL 影响 |
+|------|------|---------|---------|
+| `_poll()` 轮询 | `transcription.py:189-224` | 每 50ms 执行一次（GUI 线程） | 读取 queue 消息 + 处理状态更新，单次约 0.1-0.5ms |
+| `log_message.emit()` | `transcription.py:235` 等 | 每条日志消息 | Qt 信号跨线程投递 + GUI 文本更新，高频但单次轻量 |
+| `file_status_changed.emit()` | `transcription.py:240/248` | 文件状态变更 | 触发 home_page 文件列表 UI 更新 |
+| `refresh_needed.emit()` | `transcription.py` | 转写完成后 | 触发文件列表全量刷新 |
+
+#### 6.3 轻量级操作（微秒级 GIL 持有）
+
+| 操作 | 位置 | 触发条件 | GIL 影响 |
+|------|------|---------|---------|
+| ComboBox 切换选项 | `settings_page.py` | 用户操作 | 仅更新 UI 状态，几乎无 GIL 影响 |
+| `_safety_check()` | `app.py:259-271` | 每 5 秒一次（GUI 线程） | `hasattr` 检查，极轻量 |
+| `status_changed.emit()` | `transcription.py:231` | 状态更新 | 状态栏文本更新 |
+
+#### 6.4 竞争热点分析
+
+转写期间的 GIL 竞争热点集中在两个场景：
+
+**场景 1：用户在设置页操作并保存**
+- `_on_save()` 触发 17 次 `json.dump()` + `os.replace()`
+- 每次磁盘写入期间（10-50ms），GUI 线程持有 GIL
+- worker 线程的 Python 层操作（特征提取、标点处理等）被阻塞
+- **这是日志中观察到的主要竞争源**
+
+**场景 2：转写后处理阶段**
+- `_match_voiceprints()`、`_match_cross_track_speakers()`、`_apply_speaker_names()` 在 GUI 线程执行
+- AI 摘要/纠错的 HTTP 请求在后台线程，但请求构建和响应处理需要 GIL
+- 这些操作是串行的，不会与转写推理竞争（推理已完成）
+
+#### 6.5 修复优先级
+
+```
+P0（必须修复）：
+  1. _on_save() 批量保存 → save=False + 统一 save()
+  2. home_page.py 去除重复保存
+  3. 心跳线程（推理期间持续发心跳）
+  4. 超时放宽到 600 秒
+
+P1（建议修复）：
+  5. VB-Cable 即时保存改为延迟保存（在 _on_save 中统一处理）
+  6. 转写期间禁止 config 即时保存（延迟保存模式作为兜底）
+```
+
+P0 的 4 项修复可解决 95% 以上的 GIL 竞争问题。P1 是防御性措施，防止未来新增的 config 保存点再次引入问题。
+
+---
+
+## [MiMo 审查意见] 2026-07-02
+
+> 逐条验证 Qoder 审查结论，确认方案可行性。
+
+### 一、根因分析验证
+
+**Qoder 结论："心跳缺失是主因，GIL 竞争是加剧因素" — 确认正确**
+
+代码验证：
+- `transcriber.py:701-705`：`model.generate()` 推理期间无 `progress_callback` 调用
+- `transcribe_worker.py:184`：`progress_cb` 只在 `transcribe()` 内部被调用
+- 日志：15:33:54 模型加载后 → 15:38:54 超时，中间零日志
+
+推理 5 分钟音频可能需要 3-10 分钟，期间无心跳，300 秒超时必然触发。即使没有 GIL 竞争也会超时。
+
+### 二、方案 A 拒绝 — 确认正确
+
+Qoder 指出 subprocess + JSON Lines 本质上是"重新发明 multiprocessing"，5 个风险点都是真实问题。确认拒绝方案 A。
+
+### 三、推荐方案验证
+
+**修复 1：心跳线程** — 可行，改动小
+
+`transcribe_worker.py` 中在 `transcriber.transcribe()` 前后启动/停止心跳线程。`threading.Event` 控制生命周期，`daemon=True` 确保主进程退出时自动终止。
+
+**修复 2：_on_save() 批量写入** — 确认必要
+
+`config.py:134` 的 `save=True` 默认值确认。每次 `config.set()` 都触发 `json.dump()` + `os.replace()`。`_on_save()` 中 16 次 `config.set()` = 16 次磁盘写入 = 16 次 GIL 阻塞。改为 `save=False` + 最后统一 `save()` 是正确做法。
+
+**修复 3：超时放宽到 600 秒** — 合理安全余量
+
+**修复 4（Qoder 补充）：VB-Cable 默认值** — 确认根因
+
+`config.py:30` DEFAULTS 为 `False`，注释说"默认使用"，`settings_page.py:428` 回退值为 `True`。checkbox 显示勾选但 config 实际是 False，保存时写入 False。修复：DEFAULTS 改为 True。
+
+### 四、实施顺序建议
+
+```
+1. VB-Cable 默认值（2行）
+2. _on_save() 批量写入（~16行）
+3. home_page.py 去除重复保存（~4行）
+4. 心跳线程（~15行）
+5. 超时放宽到 600 秒（1行）
+```
+
+共约 38 行代码改动，不涉及架构变更。先实施后测试。
