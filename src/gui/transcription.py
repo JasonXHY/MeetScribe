@@ -539,38 +539,34 @@ class TranscriptionHandler(QObject):
             "confidence": confidence,
         }
         try:
-            if self._app and hasattr(self._app, 'file_manager'):
-                for item in self._app.file_manager.files:
-                    if item.status == FileStatus.DONE and item.result_path:
-                        if item.file_path not in self._current_batch_paths:
-                            logger.debug(f"[VOICEPRINT] Skipping {item.file_path}: not in batch")
-                            continue
-                        logger.debug(f"[VOICEPRINT] Item status: {item.status}, result_path: {item.result_path}")
-                        logger.debug(f"[VOICEPRINT] File path in batch: {item.file_path in self._current_batch_paths}")
+            if confidence == "confirmed":
+                # confirmed 级别：写入转写文件、摘要、音色库
+                if self._app and hasattr(self._app, 'file_manager'):
+                    for item in self._app.file_manager.files:
+                        if item.status == FileStatus.DONE and item.result_path:
+                            if item.file_path not in self._current_batch_paths:
+                                continue
 
-                        # 更新 speaker_names：双轨用 "本地-N"/"远程-N"，传统用 int(1-based)
-                        str_mapping = item.speaker_names or {}
-                        if is_dual_key:
-                            str_mapping[dual_label] = name
-                        else:
-                            str_mapping[str(speaker_id + 1)] = name
-                        self._app.file_manager.update_speaker_names(
-                            item.file_path, str_mapping
-                        )
-                        logger.debug(f"[VOICEPRINT] Updated speaker_names: {str_mapping}")
+                            str_mapping = item.speaker_names or {}
+                            if is_dual_key:
+                                str_mapping[dual_label] = name
+                            else:
+                                str_mapping[str(speaker_id + 1)] = name
+                            self._app.file_manager.update_speaker_names(
+                                item.file_path, str_mapping
+                            )
 
-                        if os.path.exists(item.result_path):
-                            apply_speaker_mapping(item.result_path, {mapping_key: name})
-                            summary_path = get_summary_path(item.result_path)
-                            if summary_path and os.path.exists(summary_path):
-                                apply_speaker_mapping(summary_path, {mapping_key: name})
+                            if os.path.exists(item.result_path):
+                                apply_speaker_mapping(item.result_path, {mapping_key: name})
+                                summary_path = get_summary_path(item.result_path)
+                                if summary_path and os.path.exists(summary_path):
+                                    apply_speaker_mapping(summary_path, {mapping_key: name})
 
-                        self.log_message.emit(
-                            f"音色库匹配: {display_label} -> {name} ({confidence})"
-                        )
+                            self.log_message.emit(
+                                f"音色库匹配: {display_label} -> {name} (已确认)"
+                            )
 
-                        # confirmed 级别自动追加声纹样本
-                        if confidence == "confirmed":
+                            # 自动追加声纹样本
                             if is_dual_key:
                                 track, spk_num = speaker_id.split("-", 1)
                                 quality = self._speaker_qualities.get(track, {}).get(int(spk_num), DEFAULT_SPK_QUALITY)
@@ -580,6 +576,13 @@ class TranscriptionHandler(QObject):
                             library.add_speaker(name, embedding,
                                 source=source_name, quality=quality)
                             logger.info(f"自动添加声纹样本: {name}")
+                            break
+            else:
+                # suggested 级别：仅记录，不写入文件（用户在 SpeakerDialog 中手动确认）
+                logger.info(f"[VOICEPRINT] Suggested match: {display_label} -> {name} (score={score:.3f})")
+                self.log_message.emit(
+                    f"音色库疑似匹配: {display_label} -> {name} (待确认)"
+                )
         except Exception as e:
             logger.error(f"Apply voiceprint match failed: {e}")
 

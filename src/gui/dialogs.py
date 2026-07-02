@@ -170,7 +170,7 @@ class PreviewDialog(QDialog):
 
         self._text_box = QTextBrowser()
         self._text_box.setOpenExternalLinks(False)
-        self._text_box.setFont(QFont("Consolas", 13))
+        self._text_box.setFont(QFont(FONT_FAMILY, 13))
         self._text_box.setStyleSheet(f"""
             QTextBrowser {{ background-color: {C_CARD}; color: {C_TXT1};
                 border: 1px solid {C_BORDER}; border-radius: 8px; padding: 8px; }}
