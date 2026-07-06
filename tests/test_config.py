@@ -257,29 +257,27 @@ def test_check_first_launch_reads_config(fake_config):
 
 
 def test_model_worker_calls_real_download_all_missing():
-    from gui import first_launch
+    from gui.workers import ModelDownloadWorker
 
     mock_mgr = MagicMock()
     mock_mgr.download_all_missing.return_value = (True, "所有模型下载完成")
 
-    with patch("transcriber.ModelManager", return_value=mock_mgr):
-        worker = first_launch.ModelDownloadWorker("/tmp/models_cache")
-        worker.run()
+    worker = ModelDownloadWorker(mock_mgr)
+    worker.run()
 
     mock_mgr.download_all_missing.assert_called_once()
 
 
 def test_model_worker_emits_finished_on_success():
-    from gui import first_launch
+    from gui.workers import ModelDownloadWorker
 
     mock_mgr = MagicMock()
     mock_mgr.download_all_missing.return_value = (True, "完成")
 
     received = []
-    with patch("transcriber.ModelManager", return_value=mock_mgr):
-        worker = first_launch.ModelDownloadWorker("/tmp/mc")
-        worker.finished.connect(lambda ok, msg: received.append((ok, msg)))
-        worker.run()
+    worker = ModelDownloadWorker(mock_mgr)
+    worker.finished.connect(lambda ok, msg: received.append((ok, msg)))
+    worker.run()
 
     assert received and received[-1][0] is True
 

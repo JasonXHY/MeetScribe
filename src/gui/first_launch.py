@@ -26,31 +26,7 @@ from gui.styles import (
 logger = logging.getLogger("MeetScribe")
 
 
-class ModelDownloadWorker(QThread):
-    """模型下载工作线程"""
-
-    progress = Signal(int, str)   # percent, message
-    finished = Signal(bool, str)  # success, message
-
-    def __init__(self, cache_dir):
-        super().__init__()
-        self._cache_dir = cache_dir
-
-    def run(self):
-        try:
-            from transcriber import ModelManager
-            manager = ModelManager(self._cache_dir)
-
-            def _cb(msg):
-                self.progress.emit(0, str(msg))
-
-            self.progress.emit(0, "正在检查模型...")
-            success, message = manager.download_all_missing(progress_callback=_cb)
-            self.progress.emit(100 if success else 0, message)
-            self.finished.emit(success, message)
-        except Exception as e:
-            logger.error(f"模型下载失败: {e}")
-            self.finished.emit(False, f"下载失败: {e}")
+from gui.workers import ModelDownloadWorker
 
 
 class FirstLaunchDialog(QDialog):
@@ -450,14 +426,18 @@ class FirstLaunchDialog(QDialog):
         self._download_btn.setText("下载中...")
         self._bg_download_btn.setEnabled(False)
 
-        self._worker = ModelDownloadWorker(self._model_dir)
+        from transcriber import ModelManager
+        manager = ModelManager(self._model_dir)
+        self._worker = ModelDownloadWorker(manager)
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_download_finished)
         self._worker.start()
 
     def _start_background_download(self):
         """启动模型下载（后台运行，立即关闭弹窗）"""
-        worker = ModelDownloadWorker(self._model_dir)
+        from transcriber import ModelManager
+        manager = ModelManager(self._model_dir)
+        worker = ModelDownloadWorker(manager)
         self.background_download_started.emit(worker)
         self._finish()
 

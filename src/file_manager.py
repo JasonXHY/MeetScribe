@@ -228,18 +228,32 @@ class FileManager:
         return None
 
     def _delete_source_file(self, item):
-        """删除条目对应的磁盘源文件（含合并组的所有源文件），带异常保护。"""
-        # 合并行：删除其所有源文件；普通行：删除自身路径
+        """删除条目对应的磁盘源文件，带路径安全校验。"""
+        # 安全校验：拒绝明显的危险路径（系统目录、根目录等）
+        DANGEROUS_PREFIXES = [
+            os.path.normpath("C:\\Windows"),
+            os.path.normpath("C:\\Program Files"),
+            os.path.normpath("C:\\Program Files (x86)"),
+            os.path.normpath("/usr"),
+            os.path.normpath("/etc"),
+            os.path.normpath("/bin"),
+        ]
+
         paths = list(item.source_files) if item.source_files else [item.file_path]
         for path in paths:
             try:
-                if path and os.path.exists(path):
-                    os.remove(path)
+                if not path:
+                    continue
+                norm_path = os.path.normpath(path)
+                if any(norm_path.startswith(p) for p in DANGEROUS_PREFIXES):
+                    logger.warning(f"Path in dangerous directory, skip delete: {path}")
+                    continue
+                if os.path.exists(norm_path):
+                    os.remove(norm_path)
                     logger.info(f"Source file deleted: {path}")
                 else:
                     logger.warning(f"Source file not found, skip delete: {path}")
             except OSError as e:
-                # 文件被占用/权限不足等：记录并继续，不影响列表项移除
                 logger.warning(f"Failed to delete source file {path}: {e}")
 
     def get_file(self, file_path):
@@ -447,6 +461,16 @@ class FileManager:
 
                 self._files.append(audio)
                 loaded_count += 1
+
+            # 恢复 PROCESSING 状态为 PENDING（程序异常退出时的残留）
+            recovered_count = 0
+            for audio in self._files:
+                if audio.status == FileStatus.PROCESSING:
+                    audio.status = FileStatus.PENDING
+                    recovered_count += 1
+            if recovered_count > 0:
+                logger.info(f"Recovered {recovered_count} PROCESSING files to PENDING on startup")
+                self._save_to_file()
 
             logger.info(f"File history loaded: {loaded_count} items from {self._data_file}")
             return loaded_count > 0

@@ -22,23 +22,7 @@ from gui.icons import icon_api_key_visible, icon_api_key_hidden, IconColors, ico
 logger = logging.getLogger("MeetScribe")
 
 
-class ModelDownloadWorker(QThread):
-    """模型下载工作线程"""
-    finished = Signal(bool, str)  # success, message
-    progress = Signal(int, str)
-
-    def __init__(self, model_manager, parent=None):
-        super().__init__(parent)
-        self._model_manager = model_manager
-
-    def run(self):
-        try:
-            def _cb(msg):
-                self.progress.emit(0, str(msg))
-            success, msg = self._model_manager.download_all_missing(progress_callback=_cb)
-            self.finished.emit(success, msg)
-        except Exception as e:
-            self.finished.emit(False, str(e))
+from gui.workers import ModelDownloadWorker
 
 
 class SettingsPage(QWidget):
@@ -791,8 +775,35 @@ class SettingsPage(QWidget):
             QMessageBox.warning(self, "错误", "配置对象未初始化")
             return
 
-        self._config.set("recording_dir", self._rec_dir_entry.text(), save=False)
-        self._config.set("transcript_dir", self._out_dir_entry.text(), save=False)
+        # 校验路径有效性
+        rec_dir = self._rec_dir_entry.text().strip()
+        out_dir = self._out_dir_entry.text().strip()
+
+        if not rec_dir:
+            QMessageBox.warning(self, "错误", "录音目录不能为空")
+            return
+        if not out_dir:
+            QMessageBox.warning(self, "错误", "转写目录不能为空")
+            return
+
+        for dir_path, label in [(rec_dir, "录音目录"), (out_dir, "转写目录")]:
+            if not os.path.exists(dir_path):
+                reply = QMessageBox.question(
+                    self, "目录不存在",
+                    f"{label} \"{dir_path}\" 不存在，是否创建？",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes
+                )
+                if reply == QMessageBox.No:
+                    return
+            try:
+                os.makedirs(dir_path, exist_ok=True)
+            except OSError as e:
+                QMessageBox.warning(self, "错误", f"{label}无效: {e}")
+                return
+
+        self._config.set("recording_dir", rec_dir, save=False)
+        self._config.set("transcript_dir", out_dir, save=False)
 
         if hasattr(self, '_engine_combo'):
             engine_text = self._engine_combo.currentText()
@@ -826,10 +837,6 @@ class SettingsPage(QWidget):
 
         if hasattr(self, '_notification_cb'):
             self._config.set("enable_notification", self._notification_cb.isChecked(), save=False)
-
-        # VB-Cable 开关显式保存（回调可能在初始化时被 setChecked 触发，值不一定正确）
-        if hasattr(self, '_vb_cable_cb'):
-            self._config.set("use_vb_cable", self._vb_cable_cb.isChecked(), save=False)
 
         self._config.save()
         self._refresh_api_key_hint()

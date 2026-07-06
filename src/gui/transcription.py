@@ -337,16 +337,25 @@ class TranscriptionHandler(QObject):
         self._transcribing = False
         self._poll_timer.stop()
 
+        # 区分手动停止和异常/正常结束
+        was_cancelled = self._cancel_event.is_set()
+
         success_count = sum(1 for s in self._file_status.values() if s == "done")
         fail_count = sum(1 for s in self._file_status.values() if s == "failed")
 
-        # 将未完成的 processing 文件标记为 failed
+        # 将未完成的 processing 文件标记为适当状态
         if self._app and hasattr(self._app, 'file_manager'):
             for fp, status in list(self._file_status.items()):
                 if status == "processing":
-                    self._app.file_manager.update_status(fp, FileStatus.FAILED)
-                    self._file_status[fp] = "failed"
-                    fail_count += 1
+                    if was_cancelled:
+                        # 手动停止：回到 PENDING
+                        self._app.file_manager.update_status(fp, FileStatus.PENDING)
+                        self._file_status[fp] = "pending"
+                    else:
+                        # 异常/超时：标记为 FAILED
+                        self._app.file_manager.update_status(fp, FileStatus.FAILED)
+                        self._file_status[fp] = "failed"
+                        fail_count += 1
 
         # 声纹匹配
         if self._speaker_embeddings:
@@ -493,7 +502,7 @@ class TranscriptionHandler(QObject):
 
             # 第三阶段：写入映射
             for name, (speaker_id, confidence, score, embedding) in best_by_name.items():
-                self._apply_voiceprint_match(name, speaker_id, confidence, embedding, library)
+                self._apply_voiceprint_match(name, speaker_id, confidence, score, embedding, library)
 
             # 记录未写入的匹配（供日志和后续确认）
             written_ids = {v[0] for v in best_by_name.values()}
@@ -505,7 +514,7 @@ class TranscriptionHandler(QObject):
         except Exception as e:
             logger.error(f"Voiceprint matching failed: {e}")
 
-    def _apply_voiceprint_match(self, name, speaker_id, confidence, embedding, library):
+    def _apply_voiceprint_match(self, name, speaker_id, confidence, score, embedding, library):
         """将单个说话人的匹配结果写入文件，并记录到 _voiceprint_match_results。
 
         speaker_id 格式：
@@ -1200,12 +1209,32 @@ class TranscriptionHandler(QObject):
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5)
 
-        # 更新文件状态
+        # 持久化文件状态到 file_manager
         if file_path:
+            if self._app and hasattr(self._app, 'file_manager'):
+                self._app.file_manager.update_status(file_path, FileStatus.PENDING)
             self.file_status_changed.emit(file_path, FileStatus.PENDING)
+            self._file_status[file_path] = "pending"
         else:
-            for fp in self._file_status:
-                self.file_status_changed.emit(fp, FileStatus.PENDING)
+            for fp, status in list(self._file_status.items()):
+                if status == "processing":
+                    if self._app and hasattr(self._app, 'file_manager'):
+                        self._app.file_manager.update_status(fp, FileStatus.PENDING)
+                    self.file_status_changed.emit(fp, FileStatus.PENDING)
+                    self._file_status[fp] = "pending"
+
+        # 清理线程引用
+        self._thread = None
+        self._queue = None
+
+        # 推进队列（如果有下一个任务）
+        self._task_queue.complete_current_task()
+        self._check_queue()
+
+        # 发射完成信号（恢复工具栏按钮）
+        success_count = sum(1 for s in self._file_status.values() if s == "done")
+        fail_count = sum(1 for s in self._file_status.values() if s == "failed")
+        self.transcription_done.emit(success_count, fail_count)
 
         self.log_message.emit("转写已停止")
 

@@ -193,7 +193,9 @@ class PreviewDialog(QDialog):
     def _show_transcript(self):
         try:
             import markdown
-            html = markdown.markdown(self._transcript_text)
+            import re
+            text = re.sub(r'\[(\d{2}:\d{2}(?::\d{2})?)\]', r'&#91;\1&#93;', self._transcript_text)
+            html = markdown.markdown(text, extensions=['nl2br'])
             self._text_box.setHtml(html)
         except ImportError:
             self._text_box.setPlainText(self._transcript_text)
@@ -212,7 +214,9 @@ class PreviewDialog(QDialog):
         if self._summary_text:
             try:
                 import markdown
-                html = markdown.markdown(self._summary_text)
+                import re
+                text = re.sub(r'\[(\d{2}:\d{2}(?::\d{2})?)\]', r'&#91;\1&#93;', self._summary_text)
+                html = markdown.markdown(text, extensions=['nl2br'])
                 self._text_box.setHtml(html)
             except ImportError:
                 self._text_box.setPlainText(self._summary_text)
@@ -436,8 +440,14 @@ class SpeakerDialog(QDialog):
         self._cross_track_pairs = cross_track_pairs or []
         self._is_dual_track = is_dual_track
         self._merge_rules = []  # 已确认的合并规则: [(local_label, remote_label, unified_name)]
+        self._library = None  # 声纹库缓存
 
-        self._build()
+    def _get_library(self):
+        """获取声纹库实例（缓存，避免重复读取 JSON）"""
+        if self._library is None:
+            from voiceprint import VoiceprintLibrary
+            self._library = VoiceprintLibrary()
+        return self._library
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -779,7 +789,7 @@ class SpeakerDialog(QDialog):
         voiceprint_names = []
         try:
             from voiceprint import VoiceprintLibrary
-            library = VoiceprintLibrary()
+            library = self._get_library()
             voiceprint_names = sorted(library.get_speakers().keys())
         except Exception as e:
             logger.debug(f"[DIALOG] 加载音色库人名失败: {e}")
@@ -914,7 +924,7 @@ class SpeakerDialog(QDialog):
 
         try:
             from voiceprint import VoiceprintLibrary
-            library = VoiceprintLibrary()
+            library = self._get_library()
             spk_id = spk['spk_id']
             quality = self._speaker_qualities.get(spk_id, DEFAULT_SPK_QUALITY)
             library.add_speaker(name, embedding, self._file_name, quality=quality)
@@ -948,7 +958,7 @@ class SpeakerDialog(QDialog):
 
         try:
             from voiceprint import VoiceprintLibrary
-            library = VoiceprintLibrary()
+            library = self._get_library()
             matched_name, score = library.match(embedding)
         except Exception as e:
             logger.debug(f"[DIALOG] 匹配音色库失败: {e}")
@@ -1113,7 +1123,7 @@ class SpeakerDialog(QDialog):
 
         try:
             from voiceprint import VoiceprintLibrary
-            library = VoiceprintLibrary()
+            library = self._get_library()
             existing_speakers = library.get_speakers()
         except Exception as e:
             logger.debug(f"自动保存音色记录失败: {e}")

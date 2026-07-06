@@ -21,7 +21,7 @@ logger = logging.getLogger("MeetScribe")
 # - 官方推荐阈值: 0.31（ModelScope 官方示例）
 # - 提高到 0.40 减少误匹配（不同人相似度可能达到 0.25-0.38）
 MATCH_THRESHOLD = 0.40
-HIGH_CONFIDENCE = 0.50
+HIGH_CONFIDENCE = 0.55
 
 # 每个说话人最多保留的嵌入向量数量（FIFO 淘汰）
 MAX_EMBEDDINGS_PER_SPEAKER = 5

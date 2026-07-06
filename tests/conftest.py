@@ -31,6 +31,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "integration: 需要 PySide6/qtbot，offscreen 可跑")
     config.addinivalue_line("markers", "e2e_heavy: 需要 funasr + 模型 + 真实音频 fixtures")
     config.addinivalue_line("markers", "e2e_network: 需要真实云端 API Key")
+    config.addinivalue_line("markers", "scenario: 端到端场景测试 (运行: pytest -m scenario)")
 
 
 def _funasr_available():

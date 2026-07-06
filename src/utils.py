@@ -57,8 +57,8 @@ def apply_speaker_mapping(transcript_path, mapping):
         for spk_id, name in mapping.items():
             key_str = str(spk_id)
             if key_str.startswith("本地-") or key_str.startswith("远程-"):
-                # 精确替换本地-N/远程-N 标签
-                content = content.replace(key_str, name)
+                # 精确替换本地-N/远程-N 标签（用 \S 边界避免误替换文本内容）
+                content = re.sub(rf'(?<!\S){re.escape(key_str)}(?!\S)', name, content)
             elif '-' in key_str and not key_str.isdigit():
                 # 其他带连字符的字符串 key，精确替换
                 content = content.replace(key_str, name)

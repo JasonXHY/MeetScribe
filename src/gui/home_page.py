@@ -352,7 +352,7 @@ class HomePage(QWidget):
 
         # 转写调度器信号
         if self._app and hasattr(self._app, '_transcription_handler'):
-            handler = self._app._transcription_handler
+            handler = self._app.transcription_handler
             handler.file_status_changed.connect(self._on_file_status_changed)
             handler.transcription_done.connect(self._on_transcription_done_handler)
             handler.progress_updated.connect(self._on_progress_updated)
@@ -699,7 +699,7 @@ class HomePage(QWidget):
                     cross_track_pairs = []
                     is_dual_track = False
                     try:
-                        handler = self._app._transcription_handler
+                        handler = self._app.transcription_handler
                         if hasattr(handler, '_speaker_embeddings'):
                             speaker_embeddings = dict(handler._speaker_embeddings)
                         if hasattr(handler, '_speaker_qualities'):
@@ -854,7 +854,7 @@ class HomePage(QWidget):
                 fmt = self.get_selected_format()
                 paths = [f.file_path for f in ordered_items]
                 names = [f.file_name for f in ordered_items]
-                handler = self._app._transcription_handler
+                handler = self._app.transcription_handler
                 handler.add_to_queue(paths)
                 self._log(f"开始合并转写 {len(paths)} 个文件，顺序: {' -> '.join(names)}")
                 handler.start(paths, fmt, {}, "", merge=True)
@@ -865,35 +865,35 @@ class HomePage(QWidget):
     def _stop_transcription(self, file_path):
         """停止转写"""
         if self._app and hasattr(self._app, '_transcription_handler'):
-            self._app._transcription_handler.stop_transcription(file_path)
-            self._recording_bar.set_transcribing(False)
-            self.refresh_file_list()
+            self._app.transcription_handler.stop_transcription(file_path)
+            # transcription_done 信号会触发 _on_transcription_done_handler()
+            # 其中已包含 set_transcribing(False) 和 refresh_file_list()
 
     def _queue_move_up(self, file_path):
         """队列上移"""
         if self._app and hasattr(self._app, '_transcription_handler'):
-            self._app._transcription_handler.move_up_in_queue(file_path)
+            self._app.transcription_handler.move_up_in_queue(file_path)
             self._log(f"队列调整: {os.path.basename(file_path)} 上移")
             self.refresh_file_list()
 
     def _queue_move_down(self, file_path):
         """队列下移"""
         if self._app and hasattr(self._app, '_transcription_handler'):
-            self._app._transcription_handler.move_down_in_queue(file_path)
+            self._app.transcription_handler.move_down_in_queue(file_path)
             self._log(f"队列调整: {os.path.basename(file_path)} 下移")
             self.refresh_file_list()
 
     def _queue_remove(self, file_path):
         """从队列移除"""
         if self._app and hasattr(self._app, '_transcription_handler'):
-            self._app._transcription_handler.remove_from_queue(file_path)
+            self._app.transcription_handler.remove_from_queue(file_path)
             self._log(f"已从队列移除: {os.path.basename(file_path)}")
             self.refresh_file_list()
 
     def _transcribe_single(self, file_path):
         """转写单个文件（自动检测双轨配对）"""
         if self._app and hasattr(self._app, '_transcription_handler'):
-            handler = self._app._transcription_handler
+            handler = self._app.transcription_handler
             if handler.is_transcribing:
                 QMessageBox.information(self, "提示", "正在转写中，请等待完成")
                 return
@@ -928,7 +928,7 @@ class HomePage(QWidget):
                 QMessageBox.information(self, "提示", "没有待转写的文件\n请先添加音频文件")
                 return
             if self._app and hasattr(self._app, '_transcription_handler'):
-                handler = self._app._transcription_handler
+                handler = self._app.transcription_handler
                 if handler.is_transcribing:
                     QMessageBox.information(self, "提示", "正在转写中，请等待完成")
                     return

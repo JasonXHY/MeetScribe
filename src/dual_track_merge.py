@@ -34,7 +34,8 @@ def parse_timestamp(line):
 def parse_transcript_lines(text):
     """
     解析转写文本，返回 [(timestamp_sec, line_text), ...]
-    支持 md 和 llm-md 格式
+    支持 md 和 llm-md 格式。
+    md 格式中不带时间戳的行（文本行）返回 (None, line)。
     """
     lines = []
     for line in text.strip().split('\n'):
@@ -44,7 +45,31 @@ def parse_transcript_lines(text):
         ts = parse_timestamp(line)
         if ts is not None:
             lines.append((ts, line))
+        else:
+            lines.append((None, line))
     return lines
+
+
+def _group_into_paragraphs(lines):
+    """将 (ts, line) 列表按时间戳行分组为段落。
+
+    每个段落：第一行是带时间戳的行，后续行是文本行。
+    返回 [(ts, [line1, line2, ...]), ...]
+    """
+    paragraphs = []
+    current_ts = None
+    current_lines = []
+    for ts, line in lines:
+        if ts is not None:
+            if current_ts is not None:
+                paragraphs.append((current_ts, current_lines))
+            current_ts = ts
+            current_lines = [line]
+        else:
+            current_lines.append(line)
+    if current_ts is not None:
+        paragraphs.append((current_ts, current_lines))
+    return paragraphs
 
 
 def _extract_header(text):
@@ -77,24 +102,26 @@ def merge_dual_transcripts(mic_text, sys_text, mic_label="本地", sys_label="�
     mic_lines = parse_transcript_lines(mic_text)
     sys_lines = parse_transcript_lines(sys_text)
 
-    # 给每行添加来源标记
-    tagged_lines = []
-    for ts, line in mic_lines:
-        tagged_lines.append((ts, "mic", line))
-    for ts, line in sys_lines:
-        tagged_lines.append((ts, "sys", line))
+    # 按段落分组（时间戳行 + 后续文本行）
+    mic_paras = _group_into_paragraphs(mic_lines)
+    sys_paras = _group_into_paragraphs(sys_lines)
 
-    # 按时间戳排序
-    tagged_lines.sort(key=lambda x: x[0])
+    # 给每个段落添加来源标记并排序
+    tagged = []
+    for ts, lines in mic_paras:
+        tagged.append((ts, "mic", lines))
+    for ts, lines in sys_paras:
+        tagged.append((ts, "sys", lines))
+    tagged.sort(key=lambda x: x[0])
 
-    # 替换发言人标签
+    # 替换发言人标签并展平
     merged_lines = []
-    for ts, source, line in tagged_lines:
-        if source == "mic":
-            line = re.sub(r'Speaker\s+(\d+)', rf'{mic_label}-\1', line)
-        else:
-            line = re.sub(r'Speaker\s+(\d+)', rf'{sys_label}-\1', line)
-        merged_lines.append(line)
+    for ts, source, lines in tagged:
+        for line in lines:
+            if ts is not None and re.search(r'Speaker\s+\d+', line):
+                label = mic_label if source == "mic" else sys_label
+                line = re.sub(r'Speaker\s+(\d+)', rf'{label}-\1', line)
+            merged_lines.append(line)
 
     return '\n'.join(merged_lines)
 

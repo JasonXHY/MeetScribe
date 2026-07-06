@@ -9,7 +9,7 @@ import queue
 import traceback
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
-    QLabel, QFrame, QTextEdit, QStatusBar
+    QLabel, QFrame, QTextEdit, QStatusBar, QMessageBox
 )
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QIcon
@@ -361,6 +361,15 @@ class MeetScribeApp(QMainWindow):
         """添加日志"""
         self._append_log(msg)
 
+    def log_message(self, msg):
+        """公共日志方法，供子页面调用"""
+        self._append_log(msg)
+
+    @property
+    def transcription_handler(self):
+        """公共属性，供 home_page 调用"""
+        return self._transcription_handler
+
     def _append_log(self, msg):
         """线程安全的日志追加（仅显示用户关心的内容）"""
         try:
@@ -530,10 +539,43 @@ class MeetScribeApp(QMainWindow):
     def closeEvent(self, event):
         """窗口关闭事件"""
         logger.info("MeetScribeApp closing")
+
+        # 检查是否有正在进行的操作，弹出确认
+        busy_reasons = []
+        if self._recording:
+            busy_reasons.append("正在录音中")
+        if (hasattr(self, '_transcription_handler')
+                and self._transcription_handler
+                and self._transcription_handler.is_transcribing):
+            busy_reasons.append("正在转写中")
+
+        if busy_reasons:
+            reply = QMessageBox.question(
+                self, "确认退出",
+                "，".join(busy_reasons) + "，确定要退出吗？未保存的数据将丢失。",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply == QMessageBox.No:
+                event.ignore()
+                return
+
         try:
             # 停止录音
             if self._recording:
                 self.recorder.stop()
+
+            # 停止转写
+            if (hasattr(self, '_transcription_handler')
+                    and self._transcription_handler):
+                self._transcription_handler.stop_transcription()
+
+            # 停止后台下载
+            if hasattr(self, '_bg_download_worker') and self._bg_download_worker:
+                self._bg_download_worker.requestInterruption()
+                self._bg_download_worker.wait(3000)
+                self._bg_download_worker = None
+
             # 保存配置
             self._save_current_config()
             # 保存文件历史

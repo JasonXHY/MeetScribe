@@ -790,7 +790,7 @@ class VoiceprintPage(QWidget):
                     return
 
                 if self._app and hasattr(self._app, '_home_page'):
-                    self._app._home_page._log(f"已重命名说话人: {old_name} -> {new_name}")
+                    self._app.log_message(f"已重命名说话人: {old_name} -> {new_name}")
 
                 self.refresh_list()
 
@@ -814,7 +814,7 @@ class VoiceprintPage(QWidget):
                 library.remove_speaker(speaker_name)
 
                 if self._app and hasattr(self._app, '_home_page'):
-                    self._app._home_page._log(f"已删除说话人: {speaker_name}")
+                    self._app.log_message(f"已删除说话人: {speaker_name}")
 
                 self._selected_speaker = None
                 self.refresh_list()
