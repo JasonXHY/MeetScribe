@@ -71,6 +71,7 @@
 - 修复记录：`05-issues/`
 
 ### v2.0 重构（C 版 / B 版）
+- **项目总计划：** `02-plans/2026-07-03-plan-v2.0-c-version-project.md`（必读，含完整任务拆解和协作分工）
 - 需求规格：`01-specs/2026-07-03-spec-v2.0-requirements.md`
 - C 版架构设计：`02-plans/2026-07-03-plan-v2.0-c-version-architecture.md`
 - 技术验证报告：`03-reports/2026-07-03-report-v2.0-tech-validation.md`
