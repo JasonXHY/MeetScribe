@@ -928,6 +928,13 @@ class SpeakerDialog(QDialog):
             library = self._get_library()
             spk_id = spk['spk_id']
             quality = self._speaker_qualities.get(spk_id, DEFAULT_SPK_QUALITY)
+
+            # 如果用户修改了名字，删除旧名字的条目
+            old_name = spk.get('name', '')
+            if old_name and old_name != name and old_name in library.get_speakers():
+                library.remove_speaker(old_name)
+                logger.info(f"[DIALOG] Removed old speaker entry: {old_name} (replaced by {name})")
+
             library.add_speaker(name, embedding, self._file_name, quality=quality)
             sample_count = len(library.get_speakers()[name].embeddings)
             speaker_count = len(library.get_speakers())
@@ -1149,6 +1156,13 @@ class SpeakerDialog(QDialog):
 
             try:
                 quality = self._speaker_qualities.get(spk_id, DEFAULT_SPK_QUALITY)
+
+                # 如果用户修改了名字，删除旧名字的条目
+                old_name = s.get('name', '')
+                if old_name and old_name != name and old_name in library.get_speakers():
+                    library.remove_speaker(old_name)
+                    logger.info(f"[DIALOG] 自动保存: 删除旧条目 {old_name} (替换为 {name})")
+
                 added = library.add_speaker(name, embedding, self._file_name, quality=quality)
                 if added:
                     if name in existing_speakers:
