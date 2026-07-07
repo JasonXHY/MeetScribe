@@ -441,6 +441,7 @@ class SpeakerDialog(QDialog):
         self._is_dual_track = is_dual_track
         self._merge_rules = []  # 已确认的合并规则: [(local_label, remote_label, unified_name)]
         self._library = None  # 声纹库缓存
+        self._build()
 
     def _get_library(self):
         """获取声纹库实例（缓存，避免重复读取 JSON）"""
