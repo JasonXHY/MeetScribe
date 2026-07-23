@@ -157,7 +157,7 @@ class AIService:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": f"以下是需要纠错的转写文本：\n\n{chunk}"},
                     ],
-                    max_completion_tokens=16384,
+                    max_completion_tokens=32768,
                     temperature=0.1,
                     timeout=_CLOUD_TIMEOUT,
                 )
