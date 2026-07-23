@@ -701,9 +701,28 @@ class HomePage(QWidget):
                     try:
                         handler = self._app.transcription_handler
                         if hasattr(handler, '_speaker_embeddings'):
-                            speaker_embeddings = dict(handler._speaker_embeddings)
+                            # 展平分组格式 {"mic": {0: emb}} → {"0": emb, "mic-0": emb}
+                            raw_embs = handler._speaker_embeddings
+                            flat_embs = {}
+                            for track, track_embs in raw_embs.items():
+                                if isinstance(track_embs, dict):
+                                    for spk_id, emb in track_embs.items():
+                                        flat_embs[f"{track}-{spk_id}"] = emb
+                                        flat_embs[spk_id] = emb  # 兼容整数 key
+                                elif track_embs is not None:
+                                    flat_embs[track] = track_embs
+                            speaker_embeddings = flat_embs
                         if hasattr(handler, '_speaker_qualities'):
-                            speaker_qualities = dict(handler._speaker_qualities)
+                            raw_quals = handler._speaker_qualities
+                            flat_quals = {}
+                            for track, track_quals in raw_quals.items():
+                                if isinstance(track_quals, dict):
+                                    for spk_id, q in track_quals.items():
+                                        flat_quals[f"{track}-{spk_id}"] = q
+                                        flat_quals[spk_id] = q  # 兼容整数 key
+                                elif track_quals is not None:
+                                    flat_quals[track] = track_quals
+                            speaker_qualities = flat_quals
                         if hasattr(handler, '_cross_track_pairs'):
                             cross_track_pairs = list(handler._cross_track_pairs)
                     except Exception:
