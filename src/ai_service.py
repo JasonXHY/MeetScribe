@@ -157,7 +157,7 @@ class AIService:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": f"以下是需要纠错的转写文本：\n\n{chunk}"},
                     ],
-                    max_completion_tokens=4096,
+                    max_completion_tokens=16384,
                     temperature=0.1,
                     timeout=_CLOUD_TIMEOUT,
                 )
@@ -284,7 +284,7 @@ class AIService:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"以下是会议转写内容，请整理会议纪要：\n\n{transcript}"},
                 ],
-                max_completion_tokens=4096,
+                max_completion_tokens=8192,
                 temperature=0.3,
                 timeout=_CLOUD_TIMEOUT,
             )
